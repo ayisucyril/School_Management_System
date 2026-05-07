@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background-color: #0a0a0a;
+    color: #ffffff;
+    font-family: 'DM Sans', sans-serif;
+    overflow-x: hidden;
+  }
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: #111; }
+  ::-webkit-scrollbar-thumb { background: #16a34a; border-radius: 3px; }
+  ::selection { background: rgba(22,163,74,0.3); color: #fff; }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl;
+  }
+  .glass-green {
+    @apply bg-primary/5 backdrop-blur-md border border-primary/20 rounded-2xl;
+  }
+  .glass-yellow {
+    @apply bg-accent/5 backdrop-blur-md border border-accent/20 rounded-2xl;
+  }
+  .btn-primary {
+    @apply bg-primary hover:bg-primary-dark text-white font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 hover:shadow-green hover:-translate-y-0.5 active:scale-95 text-sm;
+  }
+  .btn-accent {
+    @apply bg-accent hover:bg-accent-dark text-black font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 hover:shadow-yellow hover:-translate-y-0.5 active:scale-95 text-sm;
+  }
+  .btn-outline {
+    @apply border border-primary text-primary hover:bg-primary hover:text-white font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 text-sm;
+  }
+  .btn-ghost {
+    @apply text-white/60 hover:text-white px-3 py-2 rounded-lg transition-colors hover:bg-white/5 text-sm;
+  }
+  .input-field {
+    @apply w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-white/30 focus:outline-none focus:border-primary/50 transition-all duration-200 text-sm;
+  }
+  .table-row {
+    @apply border-b border-white/5 hover:bg-white/10 transition-colors;
+  }
+  .badge-green {
+    @apply bg-primary/15 text-primary border border-primary/20 text-xs px-2.5 py-0.5 rounded-full font-medium;
+  }
+  .badge-yellow {
+    @apply bg-accent/15 text-accent border border-accent/20 text-xs px-2.5 py-0.5 rounded-full font-medium;
+  }
+  .badge-red {
+    @apply bg-red-500/15 text-red-400 border border-red-500/20 text-xs px-2.5 py-0.5 rounded-full font-medium;
+  }
+  .badge-gray {
+    @apply bg-white/10 text-white/50 border border-white/10 text-xs px-2.5 py-0.5 rounded-full font-medium;
+  }
+  .stat-card {
+    @apply glass-card p-5 hover:border-white/20 transition-all duration-200;
+  }
+  .section-title {
+    @apply text-2xl font-heading font-bold text-white;
+  }
+  .grid-bg {
+    background-image: linear-gradient(rgba(22,163,74,0.03) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(22,163,74,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.5);
+  transition: all 0.2s;
+  text-decoration: none;
+}
+.sidebar-link:hover {
+  color: white;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar-link.active {
+  color: #16a34a;
+  background: rgba(22,163,74,0.1);
+  border: 1px solid rgba(22,163,74,0.2);
+}
+
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  background: #0a0a0a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
