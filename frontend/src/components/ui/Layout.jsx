@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Users, GraduationCap, BookOpen, BarChart3,
-  CalendarCheck, Megaphone, LogOut, Menu, X, Bell, ChevronRight, School
+  CalendarCheck, Megaphone, LogOut, Menu, X, Bell, ChevronRight, School, FileText
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -16,6 +16,7 @@ const navItems = [
   { to: '/grades', icon: BarChart3, label: 'Grades' },
   { to: '/attendance', icon: CalendarCheck, label: 'Attendance' },
   { to: '/announcements', icon: Megaphone, label: 'Announcements' },
+  { to: '/reports/terminal', icon: FileText, label: 'Terminal Report' },
 ];
 
 const Layout = ({ children }) => {

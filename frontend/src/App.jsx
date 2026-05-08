@@ -10,7 +10,9 @@ import Classes from './pages/Classes';
 import Grades from './pages/Grades';
 import Attendance from './pages/Attendance';
 import Announcements from './pages/Announcements';
+import TerminalReport from './pages/TerminalReport';
 import Layout from './components/ui/Layout';
+
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -41,6 +43,7 @@ const AppRoutes = () => (
             <Route path="/grades" element={<Grades />} />
             <Route path="/attendance" element={<Attendance />} />
             <Route path="/announcements" element={<Announcements />} />
+            <Route path="/reports/terminal" element={<TerminalReport />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Layout>

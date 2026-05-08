@@ -15,6 +15,7 @@ const classRoutes = require('./routes/classes');
 const attendanceRoutes = require('./routes/attendance');
 const announcementRoutes = require('./routes/announcements');
 const dashboardRoutes = require('./routes/dashboard');
+const reportRoutes = require('./routes/reports');
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use('/api/classes', classRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/reports', reportRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'OK', message: 'School Management API running' }));
 app.use((req, res) => res.status(404).json({ error: 'Route not found' }));
