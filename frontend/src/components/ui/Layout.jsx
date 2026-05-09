@@ -8,14 +8,14 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 
-const navItems = [
+const allNavItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
-  { to: '/students', icon: Users, label: 'Students' },
-  { to: '/teachers', icon: GraduationCap, label: 'Teachers' },
+  { to: '/students', icon: Users, label: 'Students', adminOnly: true },
+  { to: '/teachers', icon: GraduationCap, label: 'Teachers', adminOnly: true },
   { to: '/classes', icon: BookOpen, label: 'Classes' },
   { to: '/grades', icon: BarChart3, label: 'Grades' },
   { to: '/attendance', icon: CalendarCheck, label: 'Attendance' },
-  { to: '/announcements', icon: Megaphone, label: 'Announcements' },
+  { to: '/announcements', icon: Megaphone, label: 'Announcements', adminOnly: true },
   { to: '/reports/terminal', icon: FileText, label: 'Terminal Report' },
 ];
 
@@ -24,6 +24,9 @@ const Layout = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  // Filter nav items based on role
+  const navItems = allNavItems.filter(item => !item.adminOnly || user?.role === 'admin');
 
   const handleLogout = () => {
     logout();
