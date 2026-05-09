@@ -1,6 +1,7 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Student = require('../models/Student');
-const { Grade, Attendance, Class, Teacher } = require('../models/Models');
+const { Grade, Attendance, Class, Teacher, ReportDraft } = require('../models/Models');
 const { protect, authorize } = require('../middleware/auth');
 const router = express.Router();
 
@@ -45,17 +46,27 @@ router.get('/terminal', protect, authorize('admin', 'teacher'), async (req, res)
     const average = parseFloat((total / grades.length).toFixed(1));
 
     // ── 5. Compute class position ─────────────────────────────────────────────
-    // Get all students in the same class for this term
     let position = null;
     let classSize = null;
 
     if (student.classId) {
-      const classmateIds = (await Student.find({ classId: student.classId._id, status: 'active' }).select('_id')).map(s => s._id);
-      classSize = classmateIds.length;
+      // Count active students in the class
+      classSize = await Student.countDocuments({ classId: student.classId._id, status: 'active' });
 
-      // Aggregate average score per student for this term
+      // Aggregate average score per student for this term using studentId-based matching
+      // This works even if some grades don't have classId yet
+      const classmateIds = (
+        await Student.find({ classId: student.classId._id, status: 'active' }).select('_id')
+      ).map(s => s._id);
+
       const classAverages = await Grade.aggregate([
-        { $match: { classId: student.classId._id, term, academicYear: year } },
+        {
+          $match: {
+            studentId: { $in: classmateIds },
+            term,
+            academicYear: year
+          }
+        },
         { $group: { _id: '$studentId', avg: { $avg: '$score' } } },
         { $sort: { avg: -1 } }
       ]);
@@ -65,12 +76,8 @@ router.get('/terminal', protect, authorize('admin', 'teacher'), async (req, res)
     }
 
     // ── 6. Fetch attendance for this term ─────────────────────────────────────
-    // Map term to approximate date ranges
-    const termDateRanges = {
-      'Term 1': { month: { $in: [0, 1, 2, 3] } },   // Jan–Apr
-      'Term 2': { month: { $in: [4, 5, 6, 7] } },   // May–Aug
-      'Term 3': { month: { $in: [8, 9, 10, 11] } }  // Sep–Dec
-    };
+    const termMonths = { 'Term 1': [0,1,2,3], 'Term 2': [4,5,6,7], 'Term 3': [8,9,10,11] };
+    const months = termMonths[term] || [];
 
     const allAttendance = await Attendance.find({
       studentId: student._id,
@@ -80,9 +87,6 @@ router.get('/terminal', protect, authorize('admin', 'teacher'), async (req, res)
       }
     });
 
-    // Filter by term month ranges
-    const termMonths = { 'Term 1': [0,1,2,3], 'Term 2': [4,5,6,7], 'Term 3': [8,9,10,11] };
-    const months = termMonths[term] || [];
     const termAttendance = allAttendance.filter(a => months.includes(new Date(a.date).getMonth()));
 
     const daysPresent  = termAttendance.filter(a => a.status === 'present').length;
@@ -164,7 +168,6 @@ router.get('/terminal', protect, authorize('admin', 'teacher'), async (req, res)
 });
 
 // ─── GET /api/reports/terminal/class ─────────────────────────────────────────
-// Generate reports for ALL students in a class (admin only)
 router.get('/terminal/class', protect, authorize('admin'), async (req, res) => {
   try {
     const { classId, term, academicYear } = req.query;
@@ -173,14 +176,64 @@ router.get('/terminal/class', protect, authorize('admin'), async (req, res) => {
     const students = await Student.find({ classId, status: 'active' }).select('_id');
     const year = academicYear || new Date().getFullYear().toString();
 
-    // Aggregate average per student
+    const classmateIds = students.map(s => s._id);
+
     const averages = await Grade.aggregate([
-      { $match: { classId: require('mongoose').Types.ObjectId(classId), term, academicYear: year } },
+      { $match: { studentId: { $in: classmateIds }, term, academicYear: year } },
       { $group: { _id: '$studentId', average: { $avg: '$score' }, count: { $sum: 1 } } },
       { $sort: { average: -1 } }
     ]);
 
     res.json({ success: true, classSize: students.length, rankings: averages });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── SAVE DRAFT ───────────────────────────────────────────────────────────────
+router.post('/terminal/draft', protect, authorize('admin', 'teacher'), async (req, res) => {
+  try {
+    const { studentId, term, academicYear, teacherComment, headComment } = req.body;
+    if (!studentId || !term || !academicYear)
+      return res.status(400).json({ error: 'studentId, term and academicYear are required' });
+
+    const draft = await ReportDraft.findOneAndUpdate(
+      { studentId, term, academicYear },
+      { teacherComment, headComment, savedBy: req.user._id, savedAt: new Date(), status: 'draft' },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, message: 'Draft saved successfully', draft });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── LOAD DRAFT ───────────────────────────────────────────────────────────────
+router.get('/terminal/draft', protect, authorize('admin', 'teacher'), async (req, res) => {
+  try {
+    const { studentId, term, academicYear } = req.query;
+    if (!studentId || !term || !academicYear)
+      return res.status(400).json({ error: 'studentId, term and academicYear are required' });
+
+    const draft = await ReportDraft.findOne({ studentId, term, academicYear });
+    if (!draft) return res.json({ success: true, draft: null });
+    res.json({ success: true, draft });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── FINALIZE REPORT ──────────────────────────────────────────────────────────
+router.patch('/terminal/draft/finalize', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { studentId, term, academicYear } = req.body;
+    const draft = await ReportDraft.findOneAndUpdate(
+      { studentId, term, academicYear },
+      { status: 'finalized' },
+      { new: true }
+    );
+    if (!draft) return res.status(404).json({ error: 'Draft not found' });
+    res.json({ success: true, message: 'Report finalized', draft });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

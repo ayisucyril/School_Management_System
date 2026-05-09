@@ -1,5 +1,6 @@
 const express = require('express');
 const { Grade, Teacher } = require('../models/Models');
+const Student = require('../models/Student');
 const { protect, authorize } = require('../middleware/auth');
 const router = express.Router();
 
@@ -32,6 +33,12 @@ router.post('/', protect, authorize('admin', 'teacher'), async (req, res) => {
   try {
     let gradeData = { ...req.body };
 
+    // Auto-attach classId from student
+    if (gradeData.studentId) {
+      const student = await Student.findById(gradeData.studentId).select('classId');
+      if (student?.classId) gradeData.classId = student.classId;
+    }
+
     // Auto-attach teacher profile if logged in as teacher
     if (req.user.role === 'teacher') {
       const teacherProfile = await Teacher.findOne({ userId: req.user._id });
@@ -51,13 +58,18 @@ router.post('/', protect, authorize('admin', 'teacher'), async (req, res) => {
 router.post('/bulk', protect, authorize('admin', 'teacher'), async (req, res) => {
   try {
     const { records } = req.body;
-    let gradeRecords = records;
+
+    // Auto-attach classId for each student
+    let gradeRecords = await Promise.all(records.map(async r => {
+      const student = await Student.findById(r.studentId).select('classId');
+      return { ...r, classId: student?.classId || r.classId };
+    }));
 
     // Auto-attach teacherId if logged in as teacher
     if (req.user.role === 'teacher') {
       const teacherProfile = await Teacher.findOne({ userId: req.user._id });
       if (teacherProfile) {
-        gradeRecords = records.map(r => ({
+        gradeRecords = gradeRecords.map(r => ({
           ...r,
           teacherId: teacherProfile._id,
           subject: r.subject || teacherProfile.subject

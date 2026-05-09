@@ -74,10 +74,23 @@ const announcementSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+const reportDraftSchema = new mongoose.Schema({
+  studentId:      { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
+  term:           { type: String, enum: ['Term 1', 'Term 2', 'Term 3'], required: true },
+  academicYear:   { type: String, required: true },
+  teacherComment: { type: String, default: '' },
+  headComment:    { type: String, default: '' },
+  savedBy:        { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  savedAt:        { type: Date, default: Date.now },
+  status:         { type: String, enum: ['draft', 'finalized'], default: 'draft' },
+});
+reportDraftSchema.index({ studentId: 1, term: 1, academicYear: 1 }, { unique: true });
+
 module.exports = {
-  Teacher: mongoose.model('Teacher', teacherSchema),
-  Class: mongoose.model('Class', classSchema),
-  Grade: mongoose.model('Grade', gradeSchema),
-  Attendance: mongoose.model('Attendance', attendanceSchema),
-  Announcement: mongoose.model('Announcement', announcementSchema)
+  Teacher:      mongoose.model('Teacher', teacherSchema),
+  Class:        mongoose.model('Class', classSchema),
+  Grade:        mongoose.model('Grade', gradeSchema),
+  Attendance:   mongoose.model('Attendance', attendanceSchema),
+  Announcement: mongoose.model('Announcement', announcementSchema),
+  ReportDraft:  mongoose.model('ReportDraft', reportDraftSchema),  // ← add this
 };
