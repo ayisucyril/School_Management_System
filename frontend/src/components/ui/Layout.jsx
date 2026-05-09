@@ -3,7 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Users, GraduationCap, BookOpen, BarChart3,
-  CalendarCheck, Megaphone, LogOut, Menu, X, Bell, ChevronRight, School, FileText
+  CalendarCheck, Megaphone, LogOut, Menu, X, Bell, ChevronRight,
+  School, FileText, Shield
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -12,11 +13,12 @@ const allNavItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/students', icon: Users, label: 'Students', adminOnly: true },
   { to: '/teachers', icon: GraduationCap, label: 'Teachers', adminOnly: true },
-  { to: '/classes', icon: BookOpen, label: 'Classes' },
+  { to: '/classes', icon: BookOpen, label: 'Classes', adminOnly: true },
   { to: '/grades', icon: BarChart3, label: 'Grades' },
   { to: '/attendance', icon: CalendarCheck, label: 'Attendance' },
-  { to: '/announcements', icon: Megaphone, label: 'Announcements', adminOnly: true },
+  { to: '/announcements', icon: Megaphone, label: 'Announcements' },
   { to: '/reports/terminal', icon: FileText, label: 'Terminal Report' },
+  { to: '/teacher-accounts', icon: Shield, label: 'Teacher Accounts', adminOnly: true },
 ];
 
 const Layout = ({ children }) => {
@@ -25,7 +27,6 @@ const Layout = ({ children }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  // Filter nav items based on role
   const navItems = allNavItems.filter(item => !item.adminOnly || user?.role === 'admin');
 
   const handleLogout = () => {

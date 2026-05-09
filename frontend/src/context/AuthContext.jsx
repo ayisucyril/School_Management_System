@@ -15,6 +15,7 @@ export { api };
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('school_token');
@@ -37,6 +38,9 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('school_token', res.data.token);
     localStorage.setItem('school_user', JSON.stringify(res.data.user));
     setUser(res.data.user);
+    if (res.data.isFirstLogin || res.data.mustChangePassword) {
+      setShowPasswordModal(true);
+    }
     return res.data.user;
   };
 
@@ -44,10 +48,20 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('school_token');
     localStorage.removeItem('school_user');
     setUser(null);
+    setShowPasswordModal(false);
+  };
+
+  const updateUser = (updatedUser) => {
+    setUser(updatedUser);
+    localStorage.setItem('school_user', JSON.stringify(updatedUser));
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{
+      user, loading, login, logout, updateUser,
+      isAuthenticated: !!user,
+      showPasswordModal, setShowPasswordModal
+    }}>
       {children}
     </AuthContext.Provider>
   );

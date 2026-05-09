@@ -11,8 +11,9 @@ import Grades from './pages/Grades';
 import Attendance from './pages/Attendance';
 import Announcements from './pages/Announcements';
 import TerminalReport from './pages/TerminalReport';
+import TeacherAccounts from './pages/TeacherAccounts';
 import Layout from './components/ui/Layout';
-
+import PasswordModal from './components/ui/PasswordModal';
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -44,6 +45,7 @@ const AppRoutes = () => (
             <Route path="/attendance" element={<Attendance />} />
             <Route path="/announcements" element={<Announcements />} />
             <Route path="/reports/terminal" element={<TerminalReport />} />
+            <Route path="/teacher-accounts" element={<TeacherAccounts />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Layout>
@@ -56,10 +58,21 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <Toaster position="top-right" toastOptions={{
-          style: { background: '#1a1a1a', color: '#fff', border: '1px solid rgba(22,163,74,0.3)', borderRadius: '12px' },
-          success: { iconTheme: { primary: '#16a34a', secondary: '#fff' } }
-        }} />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            style: {
+              background: '#1a1a1a',
+              color: '#fff',
+              border: '1px solid rgba(22,163,74,0.3)',
+              borderRadius: '12px'
+            },
+            success: {
+              iconTheme: { primary: '#16a34a', secondary: '#fff' }
+            }
+          }}
+        />
+        <PasswordModal />
         <AppRoutes />
       </AuthProvider>
     </Router>

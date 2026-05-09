@@ -28,24 +28,25 @@ const TeacherDashboard = ({ user }) => {
   const [profile, setProfile]       = useState(null);
   const [gradeStats, setGradeStats] = useState([]);
   const [myClasses, setMyClasses]   = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading]       = useState(true);
 
   const BACKEND = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace('/api', '');
 
   useEffect(() => {
     Promise.all([
-      api.get('/teachers').catch(() => ({ data: { teachers: [] } })),
-      api.get('/dashboard/stats').catch(() => ({ data: {} })),
-      api.get('/classes').catch(() => ({ data: { classes: [] } })),
-    ]).then(([teacherRes, dashRes, classRes]) => {
-      // Find this teacher's profile
-      const found = teacherRes.data.teachers?.find(t => t.userId === user._id || t.email === user.email);
-      setProfile(found || null);
-      setGradeStats(dashRes.data.gradeStats || []);
-      // Filter classes assigned to this teacher
-      const assigned = classRes.data.classes?.filter(c => c.teacherId?._id === found?._id || c.teacherId === found?._id);
-      setMyClasses(assigned || []);
-    }).finally(() => setLoading(false));
+        api.get('/teachers').catch(() => ({ data: { teachers: [] } })),
+        api.get('/dashboard/stats').catch(() => ({ data: {} })),
+        api.get('/classes').catch(() => ({ data: { classes: [] } })),
+        api.get('/announcements').catch(() => ({ data: { announcements: [] } })),
+      ]).then(([teacherRes, dashRes, classRes, announcementRes]) => {
+        const found = teacherRes.data.teachers?.find(t => t.userId === user._id || t.email === user.email);
+        setProfile(found || null);
+        setGradeStats(dashRes.data.gradeStats || []);
+        const assigned = classRes.data.classes?.filter(c => c.teacherId?._id === found?._id || c.teacherId === found?._id);
+        setMyClasses(assigned || []);
+        setAnnouncements(announcementRes.data.announcements || []);
+      }).finally(() => setLoading(false));
   }, [user]);
 
   const greeting = new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening';
@@ -199,6 +200,8 @@ const TeacherDashboard = ({ user }) => {
     </div>
   );
 };
+
+
 
 // ─── ADMIN DASHBOARD ──────────────────────────────────────────────────────────
 const AdminDashboard = ({ user }) => {
