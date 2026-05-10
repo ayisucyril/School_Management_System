@@ -847,7 +847,7 @@ const StudentPortal = () => {
           </AnimatePresence>
 
           <div className="text-center text-white/20 text-xs mt-8 pb-2">
-            © {new Date().getFullYear()} EduManage University Student Portal
+            © {new Date().getFullYear()} EduManage Student Portal
           </div>
         </main>
       </div>
