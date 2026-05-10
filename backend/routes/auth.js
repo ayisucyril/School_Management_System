@@ -67,55 +67,88 @@ router.put('/skip-password-change', protect, async (req, res) => {
 
 // ─── TEACHER ROUTES ───────────────────────────────────────────────────────────
 
+// Create teacher login from existing teacher profile
+// Frontend sends only { teacherProfileId } — all details pulled from Teacher model
 router.post('/create-teacher', protect, authorize('admin'), async (req, res) => {
   try {
-    const { name, email, password, subject, phone, qualification, experience, gender, address } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ error: 'Name, email and password are required' });
+    const { teacherProfileId } = req.body;
 
-    const exists = await User.findOne({ email });
-    if (exists) return res.status(400).json({ error: 'Email already exists' });
+    if (!teacherProfileId) return res.status(400).json({ error: 'teacherProfileId is required' });
 
+    // Find the teacher profile
+    const teacher = await Teacher.findById(teacherProfileId);
+    if (!teacher) return res.status(404).json({ error: 'Teacher not found in records' });
+
+    // Must have an email
+    if (!teacher.email) return res.status(400).json({ error: 'This teacher has no email address. Add their email first.' });
+
+    // Check if account already exists
+    const exists = await User.findOne({ email: teacher.email });
+    if (exists) return res.status(400).json({ error: 'A login account already exists for this teacher' });
+
+    // Default password: FirstName + last 4 of teacherId e.g. "John0001"
+    const firstName     = teacher.name.split(' ')[0];
+    const suffix        = teacher.teacherId.slice(-4);
+    const defaultPassword = `${firstName}${suffix}`;
+
+    // Create user account
     const user = await User.create({
-      name, email, password,
-      role: 'teacher',
-      isFirstLogin: true,
-      mustChangePassword: true
+      name:               teacher.name,
+      email:              teacher.email,
+      password:           defaultPassword,
+      role:               'teacher',
+      isFirstLogin:       true,
+      mustChangePassword: true,
     });
 
-    const lastTeacher = await Teacher.findOne().sort({ createdAt: -1 });
-    const lastNum = lastTeacher?.teacherId ? parseInt(lastTeacher.teacherId.replace('TCH', '')) || 0 : 0;
-    const teacherId = `TCH${String(lastNum + 1).padStart(4, '0')}`;
-
-    await Teacher.create({
-      userId: user._id,
-      teacherId, name, email,
-      phone: phone || '',
-      subject: subject || '',
-      qualification: qualification || '',
-      experience: experience || 0,
-      gender: gender || 'male',
-      address: address || '',
-      status: 'active'
-    });
+    // Link user account back to teacher profile
+    await Teacher.findByIdAndUpdate(teacherProfileId, { userId: user._id });
 
     res.status(201).json({
       success: true,
       message: 'Teacher account created successfully',
-      credentials: { email, password: req.body.password },
-      user
+      credentials: { email: teacher.email, password: defaultPassword },
+      user,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Get all teacher accounts
 router.get('/teachers', protect, authorize('admin'), async (req, res) => {
   try {
-    const teachers = await User.find({ role: 'teacher' }).select('-password');
-    res.json({ success: true, teachers });
+    const users = await User.find({ role: 'teacher' }).select('-password');
+    // Enrich with teacher profile
+    const enriched = await Promise.all(users.map(async u => {
+      const profile = await Teacher.findOne({ userId: u._id });
+      return { ...u.toObject(), teacherProfile: profile };
+    }));
+    res.json({ success: true, teachers: enriched });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Reset teacher password
+router.put('/teachers/:id/reset-password', protect, authorize('admin'), async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user || user.role !== 'teacher') return res.status(404).json({ error: 'Teacher account not found' });
+    const profile   = await Teacher.findOne({ userId: user._id });
+    const firstName = user.name.split(' ')[0];
+    const suffix    = profile?.teacherId?.slice(-4) || '0000';
+    const newPassword = `${firstName}${suffix}`;
+    user.password           = newPassword;
+    user.isFirstLogin       = true;
+    user.mustChangePassword = true;
+    await user.save();
+    res.json({ success: true, message: 'Password reset', credentials: { email: user.email, password: newPassword } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Delete teacher account
 router.delete('/teachers/:id', protect, authorize('admin'), async (req, res) => {
   try {
+    const user = await User.findById(req.params.id);
+    if (!user || user.role !== 'teacher') return res.status(404).json({ error: 'Teacher account not found' });
+    await Teacher.findOneAndUpdate({ userId: user._id }, { $unset: { userId: 1 } });
     await User.findByIdAndDelete(req.params.id);
     res.json({ success: true, message: 'Account deleted' });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -123,55 +156,45 @@ router.delete('/teachers/:id', protect, authorize('admin'), async (req, res) => 
 
 // ─── STUDENT ROUTES ───────────────────────────────────────────────────────────
 
+// Create student login from existing admission record
 router.post('/create-student', protect, authorize('admin'), async (req, res) => {
   try {
-    const { name, email, password, classId, phone, gender, dateOfBirth, address, parentName, parentPhone, parentEmail } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ error: 'Name, email and password are required' });
+    const { studentId } = req.body;
+    if (!studentId) return res.status(400).json({ error: 'studentId is required' });
 
-    const exists = await User.findOne({ email });
-    if (exists) return res.status(400).json({ error: 'Email already exists' });
+    const student = await Student.findById(studentId).populate('classId', 'name grade section');
+    if (!student) return res.status(404).json({ error: 'Student not found in admission records' });
 
-    // Auto-generate student ID from last student
-    const lastStudent = await Student.findOne().sort({ createdAt: -1 });
-    let autoStudentId;
-    if (lastStudent?.studentId) {
-      const lastNum = parseInt(lastStudent.studentId.replace('STU', '')) || 0;
-      autoStudentId = `STU${String(lastNum + 1).padStart(4, '0')}`;
-    } else {
-      autoStudentId = 'STU0001';
-    }
+    if (!student.email) return res.status(400).json({ error: 'This student has no email address. Go to Students and add their email first.' });
+
+    const exists = await User.findOne({ email: student.email });
+    if (exists) return res.status(400).json({ error: 'A login account already exists for this student' });
+
+    const firstName     = student.name.split(' ')[0];
+    const suffix        = student.studentId.slice(-4);
+    const defaultPassword = `${firstName}${suffix}`;
 
     const user = await User.create({
-      name, email, password,
-      role: 'student',
-      isFirstLogin: true,
-      mustChangePassword: true
+      name:               student.name,
+      email:              student.email,
+      password:           defaultPassword,
+      role:               'student',
+      isFirstLogin:       true,
+      mustChangePassword: true,
     });
 
-    await Student.create({
-      userId: user._id,
-      studentId: autoStudentId,
-      name, email,
-      phone: phone || '',
-      gender: gender || 'male',
-      dateOfBirth: dateOfBirth || null,
-      address: address || '',
-      classId: classId || null,
-      parentName: parentName || '',
-      parentPhone: parentPhone || '',
-      parentEmail: parentEmail || '',
-      status: 'active'
-    });
+    await Student.findByIdAndUpdate(studentId, { userId: user._id });
 
     res.status(201).json({
       success: true,
       message: 'Student account created successfully',
-      credentials: { email, password, studentId: autoStudentId },
-      user
+      credentials: { email: student.email, password: defaultPassword },
+      user,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Get all student accounts
 router.get('/students', protect, authorize('admin'), async (req, res) => {
   try {
     const users = await User.find({ role: 'student' }).select('-password');
@@ -183,27 +206,29 @@ router.get('/students', protect, authorize('admin'), async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Reset student password
 router.put('/students/:id/reset-password', protect, authorize('admin'), async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user || user.role !== 'student') return res.status(404).json({ error: 'Student account not found' });
-    const profile = await Student.findOne({ userId: user._id });
+    const profile   = await Student.findOne({ userId: user._id });
     const firstName = user.name.split(' ')[0];
-    const suffix = profile?.studentId?.slice(-4) || '0000';
+    const suffix    = profile?.studentId?.slice(-4) || '0000';
     const newPassword = `${firstName}${suffix}`;
-    user.password = newPassword;
-    user.isFirstLogin = true;
+    user.password           = newPassword;
+    user.isFirstLogin       = true;
     user.mustChangePassword = true;
     await user.save();
     res.json({ success: true, message: 'Password reset', credentials: { email: user.email, password: newPassword } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Delete student account
 router.delete('/students/:id', protect, authorize('admin'), async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user || user.role !== 'student') return res.status(404).json({ error: 'Student account not found' });
-    await Student.findOneAndUpdate({ userId: user._id }, { userId: null });
+    await Student.findOneAndUpdate({ userId: user._id }, { $unset: { userId: 1 } });
     await User.findByIdAndDelete(req.params.id);
     res.json({ success: true, message: 'Account deleted' });
   } catch (e) { res.status(500).json({ error: e.message }); }

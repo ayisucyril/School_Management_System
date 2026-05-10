@@ -1,52 +1,66 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, X, Check, Users, Trash2, Eye, EyeOff, Copy, Shield } from 'lucide-react';
+import { X, Check, Users, Trash2, Copy, Shield, Mail, Phone, BookOpen, User, RefreshCw } from 'lucide-react';
 import { api } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
 const TeacherAccounts = () => {
-  const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [showPass, setShowPass] = useState(false);
+  const [accounts, setAccounts]                   = useState([]);
+  const [allTeachers, setAllTeachers]             = useState([]);
+  const [loading, setLoading]                     = useState(true);
+  const [showForm, setShowForm]                   = useState(false);
+  const [saving, setSaving]                       = useState(false);
+  const [selectedTeacherId, setSelectedTeacherId] = useState('');
+  const [preview, setPreview]                     = useState(null);
   const [createdCredentials, setCreatedCredentials] = useState(null);
-  const [form, setForm] = useState({
-    name: '', email: '', password: '', subject: '',
-    phone: '', qualification: '', experience: 0, gender: 'male', address: ''
-  });
+  const [resetTarget, setResetTarget]             = useState(null);
 
-  useEffect(() => {
-    api.get('/auth/teachers')
-      .then(r => setAccounts(r.data.teachers || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  useEffect(() => { fetchAll(); }, []);
 
-  const generatePassword = () => {
-    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#!';
-    let pass = '';
-    for (let i = 0; i < 10; i++) pass += chars[Math.floor(Math.random() * chars.length)];
-    setForm(f => ({ ...f, password: pass }));
+  const fetchAll = async () => {
+    setLoading(true);
+    try {
+      const [accRes, teachRes] = await Promise.all([
+        api.get('/auth/teachers'),
+        api.get('/teachers'),
+      ]);
+      setAccounts(accRes.data.teachers || []);
+      setAllTeachers(teachRes.data.teachers || []);
+    } catch { toast.error('Failed to load data'); }
+    finally { setLoading(false); }
   };
 
-  const handleSubmit = async e => {
-    e.preventDefault();
+  // Teachers who don't have a login account yet
+  const accountEmails = new Set(accounts.map(a => a.email));
+  const teachersWithoutAccount = allTeachers.filter(t => t.email && !accountEmails.has(t.email));
+  const teachersWithoutEmail   = allTeachers.filter(t => !t.email);
+
+  // When admin selects a teacher, preview their profile details
+  const handleTeacherSelect = teacherId => {
+    setSelectedTeacherId(teacherId);
+    if (!teacherId) { setPreview(null); return; }
+    const teacher = allTeachers.find(t => t._id === teacherId);
+    setPreview(teacher || null);
+  };
+
+  const handleCreate = async () => {
+    if (!selectedTeacherId) { toast.error('Please select a teacher'); return; }
     setSaving(true);
     try {
-      const res = await api.post('/auth/create-teacher', form);
-      setAccounts(a => [...a, res.data.user]);
+      const res = await api.post('/auth/create-teacher', { teacherProfileId: selectedTeacherId });
       setCreatedCredentials(res.data.credentials);
+      setSelectedTeacherId('');
+      setPreview(null);
       setShowForm(false);
-      setForm({ name: '', email: '', password: '', subject: '', phone: '', qualification: '', experience: 0, gender: 'male', address: '' });
-      toast.success('Teacher account created!');
+      await fetchAll();
+      toast.success('Account created!');
     } catch (e) {
       toast.error(e.response?.data?.error || 'Failed to create account');
     } finally { setSaving(false); }
   };
 
   const handleDelete = async id => {
-    if (!confirm('Delete this teacher account? This cannot be undone.')) return;
+    if (!confirm('Delete this teacher account? The teacher will no longer be able to log in.')) return;
     try {
       await api.delete(`/auth/teachers/${id}`);
       setAccounts(a => a.filter(t => t._id !== id));
@@ -54,150 +68,186 @@ const TeacherAccounts = () => {
     } catch { toast.error('Failed to delete'); }
   };
 
-  const copyToClipboard = (text) => {
+  const handleResetPassword = async account => {
+    setResetTarget(account._id);
+    try {
+      const res = await api.put(`/auth/teachers/${account._id}/reset-password`);
+      setCreatedCredentials(res.data.credentials);
+      toast.success('Password reset');
+    } catch { toast.error('Failed to reset password'); }
+    finally { setResetTarget(null); }
+  };
+
+  const copyToClipboard = (text, label) => {
     navigator.clipboard.writeText(text);
-    toast.success('Copied to clipboard!');
+    toast.success(`${label} copied!`);
   };
 
   return (
     <div className="space-y-5">
+
+      {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="section-title flex items-center gap-2">
             <Shield size={24} className="text-primary" /> Teacher Accounts
           </h1>
-          <p className="text-white/40 text-sm mt-0.5">Manage teacher login credentials</p>
+          <p className="text-white/40 text-sm mt-0.5">Create and manage teacher login access</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2">
-          <Plus size={16} /> Create Account
+        <button onClick={() => { setShowForm(v => !v); setSelectedTeacherId(''); setPreview(null); }}
+          className="btn-primary flex items-center gap-2">
+          <Users size={16} /> Create Account
         </button>
       </div>
 
-      {/* Created credentials popup */}
+      {/* ── Create Account panel ── */}
+      <AnimatePresence>
+        {showForm && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="glass-card p-6">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-heading font-semibold text-white">Create Teacher Login Account</h3>
+              <button onClick={() => { setShowForm(false); setPreview(null); setSelectedTeacherId(''); }}
+                className="text-white/40 hover:text-white"><X size={18} /></button>
+            </div>
+            <p className="text-white/40 text-xs mb-5">
+              Select a teacher — their details will be pulled automatically from their profile.
+              Default password will be <span className="font-mono text-white/60">FirstName + last 4 of ID</span> (e.g. <span className="font-mono text-white/60">John0001</span>).
+            </p>
+
+            {/* Dropdown */}
+            <div className="mb-4">
+              <label className="block text-white/50 text-xs mb-1.5">
+                Select Teacher
+                <span className="ml-2 text-white/30">({teachersWithoutAccount.length} without account)</span>
+              </label>
+              <select
+                value={selectedTeacherId}
+                onChange={e => handleTeacherSelect(e.target.value)}
+                className="input-field">
+                <option value="">— Choose a teacher —</option>
+                {teachersWithoutAccount.map(t => (
+                  <option key={t._id} value={t._id}>
+                    {t.name} ({t.teacherId}) — {t.subject}
+                  </option>
+                ))}
+              </select>
+              {teachersWithoutAccount.length === 0 && (
+                <p className="text-green-400/70 text-xs mt-1 flex items-center gap-1">
+                  <Check size={11} /> All teachers already have accounts
+                </p>
+              )}
+              {teachersWithoutEmail.length > 0 && (
+                <p className="text-yellow-400/70 text-xs mt-1">
+                  ⚠️ {teachersWithoutEmail.length} teacher{teachersWithoutEmail.length > 1 ? 's' : ''} have no email — go to Teachers page to add their email first.
+                </p>
+              )}
+            </div>
+
+            {/* Preview teacher details */}
+            {preview && (
+              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                className="mb-5 p-4 bg-white/3 rounded-xl border border-white/10">
+                <p className="text-white/40 text-xs uppercase tracking-wider font-medium mb-3">
+                  Teacher Profile — will be used to create the account
+                </p>
+                <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2.5">
+                  {[
+                    { icon: User,     label: 'Full Name',    value: preview.name },
+                    { icon: Mail,     label: 'Email',        value: preview.email },
+                    { icon: Phone,    label: 'Phone',        value: preview.phone || '—' },
+                    { icon: BookOpen, label: 'Subject',      value: preview.subject || '—' },
+                    { icon: User,     label: 'Teacher ID',   value: preview.teacherId },
+                    { icon: User,     label: 'Qualification',value: preview.qualification || '—' },
+                    { icon: User,     label: 'Experience',   value: preview.experience ? `${preview.experience} year(s)` : '—' },
+                    { icon: User,     label: 'Gender',       value: preview.gender ? preview.gender.charAt(0).toUpperCase() + preview.gender.slice(1) : '—' },
+                  ].map(({ icon: Icon, label, value }) => (
+                    <div key={label} className="flex items-center gap-2">
+                      <Icon size={13} className="text-primary/50 flex-shrink-0" />
+                      <span className="text-white/40 text-xs w-24 flex-shrink-0">{label}:</span>
+                      <span className="text-white/80 text-xs font-medium truncate">{value}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-2">
+                  <span className="text-white/30 text-xs">Default password:</span>
+                  <span className="font-mono text-primary/80 text-xs bg-primary/10 px-2 py-0.5 rounded">
+                    {preview.name?.split(' ')[0]}{preview.teacherId?.slice(-4)}
+                  </span>
+                  <span className="text-white/20 text-xs">(teacher changes this on first login)</span>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={handleCreate}
+                disabled={!selectedTeacherId || saving}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                  selectedTeacherId && !saving
+                    ? 'btn-primary'
+                    : 'bg-white/5 text-white/20 cursor-not-allowed border border-white/10'
+                }`}>
+                {saving
+                  ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  : <Check size={15} />}
+                Create Account
+              </button>
+              <button onClick={() => { setShowForm(false); setPreview(null); setSelectedTeacherId(''); }}
+                className="btn-ghost">Cancel</button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Credentials shown after creation or reset ── */}
       <AnimatePresence>
         {createdCredentials && (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="glass-green p-5 border border-primary/30">
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="glass-card p-5 border border-primary/30 bg-primary/5">
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-2">
-                <Check size={18} className="text-primary" />
-                <h3 className="font-heading font-semibold text-white">Account Created Successfully!</h3>
+                <Check size={16} className="text-primary" />
+                <h4 className="text-white font-semibold text-sm">Account Ready — Share with Teacher</h4>
               </div>
-              <button onClick={() => setCreatedCredentials(null)} className="text-white/40 hover:text-white">
-                <X size={16} />
-              </button>
+              <button onClick={() => setCreatedCredentials(null)} className="text-white/30 hover:text-white text-lg leading-none">✕</button>
             </div>
-            <p className="text-white/50 text-sm mb-4">Share these login credentials with the teacher:</p>
-            <div className="space-y-2">
+            <div className="grid sm:grid-cols-2 gap-3">
               {[
-                { label: 'Email', value: createdCredentials.email },
-                { label: 'Password', value: createdCredentials.password },
-                { label: 'Login URL', value: window.location.origin + '/login' }
-              ].map(item => (
-                <div key={item.label} className="flex items-center justify-between bg-white/5 rounded-xl px-4 py-2.5">
+                { label: 'Email',              value: createdCredentials.email },
+                { label: 'Temporary Password', value: createdCredentials.password },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
                   <div>
-                    <span className="text-white/40 text-xs">{item.label}: </span>
-                    <span className="text-white text-sm font-mono">{item.value}</span>
+                    <p className="text-white/40 text-xs">{label}</p>
+                    <p className="text-white font-mono text-sm font-medium">{value}</p>
                   </div>
-                  <button onClick={() => copyToClipboard(item.value)}
-                    className="text-white/30 hover:text-primary transition-colors ml-3">
-                    <Copy size={14} />
+                  <button onClick={() => copyToClipboard(value, label)}
+                    className="p-1.5 rounded-lg bg-white/5 hover:bg-primary/20 text-white/40 hover:text-primary transition-all ml-3">
+                    <Copy size={13} />
                   </button>
                 </div>
               ))}
             </div>
-            <p className="text-accent text-xs mt-3">
-              ⚠️ The teacher will be prompted to change their password on first login.
+            <p className="text-white/30 text-xs mt-3">
+              ℹ️ Teacher will be prompted to set a new password on first login.
             </p>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Create form */}
-      <AnimatePresence>
-        {showForm && (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="glass-card p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="font-heading font-semibold text-white">Create Teacher Account</h3>
-              <button onClick={() => setShowForm(false)} className="text-white/40 hover:text-white"><X size={18} /></button>
-            </div>
-            <form onSubmit={handleSubmit} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[
-                { label: 'Full Name *', key: 'name', type: 'text', required: true },
-                { label: 'Email Address *', key: 'email', type: 'email', required: true },
-                { label: 'Subject *', key: 'subject', type: 'text', required: true },
-                { label: 'Phone', key: 'phone', type: 'text' },
-                { label: 'Qualification', key: 'qualification', type: 'text' },
-                { label: 'Years of Experience', key: 'experience', type: 'number' },
-                { label: 'Address', key: 'address', type: 'text' },
-              ].map(f => (
-                <div key={f.key}>
-                  <label className="block text-white/50 text-xs mb-1.5">{f.label}</label>
-                  <input type={f.type} value={form[f.key] || ''}
-                    onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
-                    className="input-field" required={f.required} />
-                </div>
-              ))}
-
-              <div>
-                <label className="block text-white/50 text-xs mb-1.5">Gender</label>
-                <select value={form.gender} onChange={e => setForm(p => ({ ...p, gender: e.target.value }))} className="input-field">
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              {/* Password field */}
-              <div className="sm:col-span-2 lg:col-span-3">
-                <label className="block text-white/50 text-xs mb-1.5">Login Password *</label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type={showPass ? 'text' : 'password'}
-                      value={form.password}
-                      onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-                      placeholder="Set a temporary password"
-                      className="input-field pr-10"
-                      required
-                    />
-                    <button type="button" onClick={() => setShowPass(!showPass)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70">
-                      {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
-                  </div>
-                  <button type="button" onClick={generatePassword}
-                    className="btn-outline text-xs whitespace-nowrap px-4">
-                    Auto Generate
-                  </button>
-                </div>
-                <p className="text-white/30 text-xs mt-1">
-                  Teacher will be asked to change this on first login
-                </p>
-              </div>
-
-              <div className="sm:col-span-2 lg:col-span-3 flex gap-3">
-                <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2">
-                  {saving
-                    ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    : <Check size={15} />}
-                  Create Account
-                </button>
-                <button type="button" onClick={() => setShowForm(false)} className="btn-ghost">Cancel</button>
-              </div>
-            </form>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Accounts list */}
+      {/* ── Accounts table ── */}
       <div className="glass-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
+          <h3 className="font-heading font-semibold text-white text-sm">All Teacher Accounts</h3>
+          <span className="text-white/30 text-xs">{accounts.length} accounts</span>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-white/5">
-                {['Teacher', 'Email', 'Role', 'First Login', 'Created', 'Actions'].map(h => (
+                {['Teacher', 'Email', 'Subject', 'Status', 'Created', 'Actions'].map(h => (
                   <th key={h} className="text-left py-3 px-4 text-white/40 text-xs font-medium">{h}</th>
                 ))}
               </tr>
@@ -212,32 +262,46 @@ const TeacherAccounts = () => {
                 </td></tr>
               ) : accounts.map((t, i) => (
                 <motion.tr key={t._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                  transition={{ delay: i * 0.04 }} className="table-row">
+                  transition={{ delay: i * 0.03 }} className="table-row">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-sm font-bold">
-                        {t.name[0]}
+                      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold">
+                        {t.name?.[0]?.toUpperCase()}
                       </div>
-                      <span className="text-white text-sm font-medium">{t.name}</span>
+                      <div>
+                        <p className="text-white text-sm font-medium">{t.name}</p>
+                        <p className="text-white/30 text-xs font-mono">{t.teacherProfile?.teacherId || '—'}</p>
+                      </div>
                     </div>
                   </td>
                   <td className="py-3 px-4 text-white/50 text-xs">{t.email}</td>
+                  <td className="py-3 px-4 text-white/50 text-xs">{t.teacherProfile?.subject || '—'}</td>
                   <td className="py-3 px-4">
-                    <span className="badge-green capitalize">{t.role}</span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={t.isFirstLogin ? 'badge-yellow' : 'badge-green'}>
-                      {t.isFirstLogin ? 'Pending' : 'Logged In'}
-                    </span>
+                    {t.mustChangePassword || t.isFirstLogin ? (
+                      <span className="badge-yellow">Pending login</span>
+                    ) : (
+                      <span className="badge-green">Active</span>
+                    )}
                   </td>
                   <td className="py-3 px-4 text-white/40 text-xs">
-                    {new Date(t.createdAt).toLocaleDateString()}
+                    {new Date(t.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </td>
                   <td className="py-3 px-4">
-                    <button onClick={() => handleDelete(t._id)}
-                      className="p-1.5 rounded-lg bg-white/5 hover:bg-red-500/20 text-white/50 hover:text-red-400 transition-all">
-                      <Trash2 size={13} />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleResetPassword(t)}
+                        disabled={resetTarget === t._id}
+                        title="Reset password"
+                        className="p-1.5 rounded-lg bg-white/5 hover:bg-yellow-500/20 text-white/40 hover:text-yellow-400 transition-all">
+                        {resetTarget === t._id
+                          ? <div className="w-3 h-3 border-2 border-white/30 border-t-yellow-400 rounded-full animate-spin" />
+                          : <RefreshCw size={13} />}
+                      </button>
+                      <button onClick={() => handleDelete(t._id)}
+                        className="p-1.5 rounded-lg bg-white/5 hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-all">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </td>
                 </motion.tr>
               ))}
