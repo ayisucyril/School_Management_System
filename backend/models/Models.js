@@ -26,6 +26,7 @@ const classSchema = new mongoose.Schema({
   room: { type: String, default: '' },
   schedule: { type: String, default: '' },
   academicYear: { type: String, default: new Date().getFullYear().toString() },
+  subjects: { type: [String], default: [] }, // ← subjects assigned to this class
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -92,5 +93,5 @@ module.exports = {
   Grade:        mongoose.model('Grade', gradeSchema),
   Attendance:   mongoose.model('Attendance', attendanceSchema),
   Announcement: mongoose.model('Announcement', announcementSchema),
-  ReportDraft:  mongoose.model('ReportDraft', reportDraftSchema),  // ← add this
+  ReportDraft:  mongoose.model('ReportDraft', reportDraftSchema),
 };
