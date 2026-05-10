@@ -20,6 +20,7 @@ const allNavItems = [
   { to: '/reports/terminal', icon: FileText, label: 'Terminal Report' },
   { to: '/teacher-accounts', icon: Shield, label: 'Teacher Accounts', adminOnly: true },
   { to: '/student-portal', icon: GraduationCap, label: 'Student Portal' },
+  { to: '/student-accounts', icon: Users, label: 'Student Accounts', adminOnly: true },
 ];
 
 const SIDEBAR_W     = 220;

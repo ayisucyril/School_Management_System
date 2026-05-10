@@ -1,4 +1,3 @@
-import StudentPortal from './pages/StudentPortal';
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
@@ -13,6 +12,8 @@ import Attendance from './pages/Attendance';
 import Announcements from './pages/Announcements';
 import TerminalReport from './pages/TerminalReport';
 import TeacherAccounts from './pages/TeacherAccounts';
+import StudentAccounts from './pages/StudentAccounts';
+import StudentPortal from './pages/StudentPortal';
 import Layout from './components/ui/Layout';
 import PasswordModal from './components/ui/PasswordModal';
 
@@ -41,13 +42,14 @@ const AppRoutes = () => (
             <Route path="/" element={<Dashboard />} />
             <Route path="/students" element={<Students />} />
             <Route path="/teachers" element={<Teachers />} />
-            <Route path="/student-portal" element={<StudentPortal />} />
             <Route path="/classes" element={<Classes />} />
             <Route path="/grades" element={<Grades />} />
             <Route path="/attendance" element={<Attendance />} />
             <Route path="/announcements" element={<Announcements />} />
             <Route path="/reports/terminal" element={<TerminalReport />} />
             <Route path="/teacher-accounts" element={<TeacherAccounts />} />
+            <Route path="/student-accounts" element={<StudentAccounts />} />
+            <Route path="/student-portal" element={<StudentPortal />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Layout>
