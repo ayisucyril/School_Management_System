@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, X, Check, BarChart3, Trash2, ChevronLeft, User } from 'lucide-react';
+import { Upload, X, Check, BarChart3, Trash2, ChevronLeft, AlertCircle } from 'lucide-react';
 import { api } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
 const gradeColor = g => {
@@ -21,6 +22,18 @@ const gradeColorHex = g => {
   return '#ef4444';
 };
 
+// Compute grade letter from score
+const computeGrade = score => {
+  const s = Number(score);
+  if (s >= 90) return 'A+';
+  if (s >= 80) return 'A';
+  if (s >= 70) return 'B+';
+  if (s >= 60) return 'B';
+  if (s >= 50) return 'C';
+  if (s >= 40) return 'D';
+  return 'F';
+};
+
 // ─── Student detail view ──────────────────────────────────────────────────────
 const StudentGrades = ({ student, grades, filterTerm, onBack, onDelete }) => {
   const filtered = filterTerm ? grades.filter(g => g.term === filterTerm) : grades;
@@ -29,11 +42,9 @@ const StudentGrades = ({ student, grades, filterTerm, onBack, onDelete }) => {
     : null;
 
   return (
-    <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 30 }}>
-      {/* Back button + student header */}
+    <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }}>
       <div className="flex items-center gap-3 mb-5">
-        <button onClick={onBack}
-          className="flex items-center gap-1.5 text-white/50 hover:text-white text-sm transition-colors">
+        <button onClick={onBack} className="flex items-center gap-1.5 text-white/50 hover:text-white text-sm transition-colors">
           <ChevronLeft size={16} /> Back
         </button>
         <div className="w-px h-4 bg-white/10" />
@@ -53,8 +64,6 @@ const StudentGrades = ({ student, grades, filterTerm, onBack, onDelete }) => {
           </div>
         )}
       </div>
-
-      {/* Grades table for this student */}
       <div className="glass-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -72,8 +81,7 @@ const StudentGrades = ({ student, grades, filterTerm, onBack, onDelete }) => {
                   <p className="text-white/30 text-sm">No grades for {filterTerm || 'any term'}</p>
                 </td></tr>
               ) : filtered.map((g, i) => (
-                <motion.tr key={g._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                  transition={{ delay: i * 0.04 }} className="table-row">
+                <motion.tr key={g._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }} className="table-row">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full" style={{ background: gradeColorHex(g.grade) }} />
@@ -93,8 +101,7 @@ const StudentGrades = ({ student, grades, filterTerm, onBack, onDelete }) => {
                   <td className="py-3 px-4 text-white/40 text-xs">{g.academicYear}</td>
                   <td className="py-3 px-4 text-white/40 text-xs">{g.remarks || '—'}</td>
                   <td className="py-3 px-4">
-                    <button onClick={() => onDelete(g._id)}
-                      className="p-1.5 rounded-lg bg-white/5 hover:bg-red-500/20 text-white/50 hover:text-red-400 transition-all">
+                    <button onClick={() => onDelete(g._id)} className="p-1.5 rounded-lg bg-white/5 hover:bg-red-500/20 text-white/50 hover:text-red-400 transition-all">
                       <Trash2 size={13} />
                     </button>
                   </td>
@@ -108,51 +115,279 @@ const StudentGrades = ({ student, grades, filterTerm, onBack, onDelete }) => {
   );
 };
 
-// ─── Main Grades component ────────────────────────────────────────────────────
-const Grades = () => {
-  const [grades, setGrades]       = useState([]);
-  const [students, setStudents]   = useState([]);
-  const [classes, setClasses]     = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [showForm, setShowForm]   = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState(null); // student object when drilling in
-  const [form, setForm]           = useState({
-    studentId: '', subject: '', score: '',
-    term: 'Term 1', academicYear: new Date().getFullYear().toString(), remarks: ''
-  });
-  const [classSubjects, setClassSubjects] = useState([]);
-  const [saving, setSaving]       = useState(false);
-  const [filterTerm, setFilterTerm] = useState('');
+// ─── Upload Results form ──────────────────────────────────────────────────────
+const UploadResults = ({ myClasses, allGrades, term, academicYear, onClose, onSaved }) => {
+  const [selectedClassId, setSelectedClassId] = useState(myClasses.length === 1 ? myClasses[0]._id : '');
+  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [scores, setScores] = useState({}); // { subject: score }
+  const [remarks, setRemarks] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const selectedClass = myClasses.find(c => c._id === selectedClassId);
+  const subjects = selectedClass?.subjects || [];
+
+  // Students in this class who have NOT had results uploaded for this term yet
+  const classStudents = selectedClass?.students || [];
+  const doneStudentIds = new Set(
+    allGrades
+      .filter(g => g.term === term && g.academicYear === academicYear)
+      .map(g => g.studentId?._id || g.studentId)
+  );
+  const availableStudents = classStudents.filter(s => !doneStudentIds.has(s._id));
+
+  // Reset scores when student or class changes
+  useEffect(() => {
+    const init = {};
+    const initR = {};
+    subjects.forEach(s => { init[s] = ''; initR[s] = ''; });
+    setScores(init);
+    setRemarks(initR);
+    setSelectedStudentId('');
+  }, [selectedClassId]);
 
   useEffect(() => {
-    Promise.all([
-      api.get('/grades', { params: { term: filterTerm || undefined } }).then(r => setGrades(r.data.grades || [])),
-      api.get('/students').then(r => setStudents(r.data.students || [])),
-      api.get('/classes').then(r => setClasses(r.data.classes || [])),
-    ]).finally(() => setLoading(false));
-  }, [filterTerm]);
+    const init = {};
+    const initR = {};
+    subjects.forEach(s => { init[s] = ''; initR[s] = ''; });
+    setScores(init);
+    setRemarks(initR);
+  }, [selectedStudentId]);
 
-  const handleStudentChange = studentId => {
-    setForm(p => ({ ...p, studentId, subject: '' }));
-    if (!studentId) { setClassSubjects([]); return; }
-    const student = students.find(s => s._id === studentId);
-    const classId = student?.classId?._id || student?.classId;
-    const cls = classes.find(c => c._id === classId);
-    setClassSubjects(cls?.subjects || []);
-  };
+  const allFilled = subjects.length > 0 && subjects.every(s => scores[s] !== '' && scores[s] !== undefined);
 
-  const handleSubmit = async e => {
-    e.preventDefault(); setSaving(true);
+  const handleSave = async () => {
+    if (!selectedStudentId) { toast.error('Select a student'); return; }
+    if (!allFilled) { toast.error('Enter scores for all subjects before saving'); return; }
+
+    // Validate scores
+    for (const s of subjects) {
+      const val = Number(scores[s]);
+      if (isNaN(val) || val < 0 || val > 100) {
+        toast.error(`Score for ${s} must be between 0 and 100`);
+        return;
+      }
+    }
+
+    setSaving(true);
     try {
-      const res = await api.post('/grades', form);
-      setGrades(gs => [res.data.grade, ...gs]);
-      toast.success('Grade recorded');
-      setShowForm(false);
-      setForm({ studentId: '', subject: '', score: '', term: 'Term 1', academicYear: new Date().getFullYear().toString(), remarks: '' });
-      setClassSubjects([]);
-    } catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
-    finally { setSaving(false); }
+      const records = subjects.map(s => ({
+        studentId: selectedStudentId,
+        subject: s,
+        score: Number(scores[s]),
+        term,
+        academicYear,
+        classId: selectedClassId,
+        remarks: remarks[s] || '',
+      }));
+      await api.post('/grades/bulk', { records });
+      toast.success(`Results uploaded for ${availableStudents.find(s => s._id === selectedStudentId)?.name}`);
+      onSaved();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+      className="glass-card p-6">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h3 className="font-heading font-semibold text-white">Upload Results</h3>
+          <p className="text-white/40 text-xs mt-0.5">{term} · {academicYear}</p>
+        </div>
+        <button onClick={onClose} className="text-white/40 hover:text-white"><X size={18} /></button>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-4 mb-6">
+        {/* Class selector */}
+        <div>
+          <label className="block text-white/50 text-xs mb-1.5">Class *</label>
+          {myClasses.length === 1 ? (
+            <div className="input-field text-white/70">{myClasses[0].name} — Grade {myClasses[0].grade}</div>
+          ) : (
+            <select value={selectedClassId} onChange={e => setSelectedClassId(e.target.value)} className="input-field" required>
+              <option value="">— Select Class —</option>
+              {myClasses.map(c => <option key={c._id} value={c._id}>{c.name} — Grade {c.grade}{c.section}</option>)}
+            </select>
+          )}
+        </div>
+
+        {/* Student selector — only shows students without results this term */}
+        <div>
+          <label className="block text-white/50 text-xs mb-1.5">
+            Student *
+            {selectedClassId && (
+              <span className="ml-2 text-white/30">
+                ({availableStudents.length} remaining · {doneStudentIds.size > 0 ? `${[...doneStudentIds].filter(id => classStudents.find(s => s._id === id)).length} done` : '0 done'})
+              </span>
+            )}
+          </label>
+          <select
+            value={selectedStudentId}
+            onChange={e => setSelectedStudentId(e.target.value)}
+            className="input-field"
+            disabled={!selectedClassId}
+            required>
+            <option value="">— Select Student —</option>
+            {availableStudents.map(s => (
+              <option key={s._id} value={s._id}>{s.name} ({s.studentId})</option>
+            ))}
+          </select>
+          {selectedClassId && availableStudents.length === 0 && (
+            <p className="text-green-400/70 text-xs mt-1 flex items-center gap-1">
+              <Check size={11} /> All students in this class have results for {term}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Subjects grid — only show when student selected */}
+      {selectedStudentId && subjects.length === 0 && (
+        <div className="flex items-center gap-2 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl mb-4">
+          <AlertCircle size={16} className="text-yellow-400 flex-shrink-0" />
+          <p className="text-yellow-400/80 text-sm">No subjects assigned to this class. Ask admin to add subjects first.</p>
+        </div>
+      )}
+
+      {selectedStudentId && subjects.length > 0 && (
+        <>
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-white/50 text-xs uppercase tracking-wider font-medium">Subject Scores</p>
+            <p className="text-white/30 text-xs">
+              {subjects.filter(s => scores[s] !== '').length} / {subjects.length} filled
+              {allFilled && <span className="text-green-400 ml-2">✓ All done</span>}
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+            {subjects.map(subject => {
+              const val = scores[subject];
+              const grade = val !== '' ? computeGrade(val) : null;
+              return (
+                <div key={subject} className="p-3 bg-white/3 rounded-xl border border-white/5">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-white/70 text-xs font-medium">{subject}</label>
+                    {grade && (
+                      <span className={gradeColor(grade)}>{grade}</span>
+                    )}
+                  </div>
+                  <input
+                    type="number" min="0" max="100"
+                    value={val}
+                    onChange={e => setScores(p => ({ ...p, [subject]: e.target.value }))}
+                    placeholder="0 – 100"
+                    className="input-field text-sm py-1.5"
+                  />
+                  <input
+                    type="text"
+                    value={remarks[subject] || ''}
+                    onChange={e => setRemarks(p => ({ ...p, [subject]: e.target.value }))}
+                    placeholder="Remarks (optional)"
+                    className="input-field text-xs py-1 mt-1.5 text-white/50"
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Warning if not all filled */}
+          {!allFilled && (
+            <div className="flex items-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl mb-4">
+              <AlertCircle size={14} className="text-yellow-400 flex-shrink-0" />
+              <p className="text-yellow-400/80 text-xs">Fill in all subject scores before saving.</p>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button
+              onClick={handleSave}
+              disabled={saving || !allFilled}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                allFilled && !saving
+                  ? 'btn-primary'
+                  : 'bg-white/5 text-white/20 cursor-not-allowed border border-white/10'
+              }`}>
+              {saving
+                ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                : <Check size={15} />}
+              Record Results
+            </button>
+            <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
+          </div>
+        </>
+      )}
+    </motion.div>
+  );
+};
+
+// ─── Main Grades component ────────────────────────────────────────────────────
+const Grades = () => {
+  const { user } = useAuth();
+  const [grades, setGrades]             = useState([]);
+  const [students, setStudents]         = useState([]);
+  const [classes, setClasses]           = useState([]);
+  const [teacherProfile, setTeacherProfile] = useState(null);
+  const [loading, setLoading]           = useState(true);
+  const [showUpload, setShowUpload]     = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [filterTerm, setFilterTerm]     = useState('');
+  const [filterTerm2, setFilterTerm2]   = useState('Term 1'); // for upload form
+  const [filterYear, setFilterYear]     = useState(new Date().getFullYear().toString());
+
+  useEffect(() => {
+    const fetchAll = async () => {
+      try {
+        const [gradesRes, studentsRes, classesRes] = await Promise.all([
+          api.get('/grades', { params: { term: filterTerm || undefined } }),
+          api.get('/students'),
+          api.get('/classes'),
+        ]);
+        setGrades(gradesRes.data.grades || []);
+        setStudents(studentsRes.data.students || []);
+
+        const allClasses = classesRes.data.classes || [];
+
+        // If teacher, find their profile and assigned classes
+        if (user?.role === 'teacher') {
+          const tRes = await api.get('/teachers');
+          const found = tRes.data.teachers?.find(t => t.email === user.email || t.userId === user._id);
+          setTeacherProfile(found || null);
+
+          if (found) {
+            // Attach students to each class
+            const myClassIds = allClasses
+              .filter(c => c.teacherId?._id === found._id || c.teacherId === found._id)
+              .map(c => c._id);
+
+            const enriched = allClasses
+              .filter(c => myClassIds.includes(c._id))
+              .map(c => ({
+                ...c,
+                students: (studentsRes.data.students || []).filter(s =>
+                  s.classId?._id === c._id || s.classId === c._id
+                )
+              }));
+            setClasses(enriched);
+          }
+        } else {
+          // Admin: attach students to all classes
+          const enriched = allClasses.map(c => ({
+            ...c,
+            students: (studentsRes.data.students || []).filter(s =>
+              s.classId?._id === c._id || s.classId === c._id
+            )
+          }));
+          setClasses(enriched);
+        }
+      } catch (e) {
+        toast.error('Failed to load data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAll();
+  }, [filterTerm, user]);
 
   const handleDelete = async id => {
     if (!confirm('Delete this grade?')) return;
@@ -163,6 +398,12 @@ const Grades = () => {
     } catch { toast.error('Failed'); }
   };
 
+  const handleSaved = async () => {
+    // Refresh grades after upload
+    const res = await api.get('/grades', { params: { term: filterTerm || undefined } });
+    setGrades(res.data.grades || []);
+  };
+
   // Group grades by student
   const gradesByStudent = grades.reduce((acc, g) => {
     const id = g.studentId?._id || g.studentId;
@@ -171,10 +412,9 @@ const Grades = () => {
     acc[id].grades.push(g);
     return acc;
   }, {});
-
   const studentRows = Object.values(gradesByStudent);
 
-  // If a student is selected, show their detail view
+  // Student detail view
   if (selectedStudent) {
     const studentGrades = grades.filter(g => {
       const id = g.studentId?._id || g.studentId;
@@ -182,7 +422,6 @@ const Grades = () => {
     });
     return (
       <div className="space-y-5">
-        {/* Term filter stays visible */}
         <div className="flex gap-2">
           {['', 'Term 1', 'Term 2', 'Term 3'].map(t => (
             <button key={t} onClick={() => setFilterTerm(t)}
@@ -209,8 +448,8 @@ const Grades = () => {
           <h1 className="section-title">Grades</h1>
           <p className="text-white/40 text-sm mt-0.5">{grades.length} records · {studentRows.length} students</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2">
-          <Plus size={16} /> Add Grade
+        <button onClick={() => setShowUpload(v => !v)} className="btn-primary flex items-center gap-2">
+          <Upload size={16} /> Upload Results
         </button>
       </div>
 
@@ -224,73 +463,40 @@ const Grades = () => {
         ))}
       </div>
 
-      {/* Grade form */}
+      {/* Upload form */}
       <AnimatePresence>
-        {showForm && (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="glass-card p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="font-heading font-semibold text-white">Record Grade</h3>
-              <button onClick={() => setShowForm(false)} className="text-white/40 hover:text-white"><X size={18} /></button>
-            </div>
-            <form onSubmit={handleSubmit} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {showUpload && (
+          <>
+            {/* Term + Year selector above the form */}
+            <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              className="flex gap-3 items-center">
               <div>
-                <label className="block text-white/50 text-xs mb-1.5">Student *</label>
-                <select value={form.studentId} onChange={e => handleStudentChange(e.target.value)} className="input-field" required>
-                  <option value="">Select Student</option>
-                  {students.map(s => <option key={s._id} value={s._id}>{s.name} ({s.studentId})</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-white/50 text-xs mb-1.5">
-                  Subject *
-                  {classSubjects.length > 0 && <span className="ml-2 text-primary/60">({classSubjects.length} available)</span>}
-                </label>
-                {classSubjects.length > 0 ? (
-                  <select value={form.subject} onChange={e => setForm(p => ({ ...p, subject: e.target.value }))} className="input-field" required>
-                    <option value="">Select Subject</option>
-                    {classSubjects.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                ) : (
-                  <input value={form.subject} onChange={e => setForm(p => ({ ...p, subject: e.target.value }))}
-                    placeholder={form.studentId ? "No subjects set — type manually" : "Select a student first"}
-                    className="input-field" required />
-                )}
-                {form.studentId && classSubjects.length === 0 && (
-                  <p className="text-white/30 text-xs mt-1">💡 Ask admin to add subjects to this class.</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-white/50 text-xs mb-1.5">Score (0–100) *</label>
-                <input type="number" min="0" max="100" value={form.score}
-                  onChange={e => setForm(p => ({ ...p, score: e.target.value }))} className="input-field" required />
-              </div>
-              <div>
-                <label className="block text-white/50 text-xs mb-1.5">Term *</label>
-                <select value={form.term} onChange={e => setForm(p => ({ ...p, term: e.target.value }))} className="input-field">
+                <label className="text-white/40 text-xs mr-2">Term:</label>
+                <select value={filterTerm2} onChange={e => setFilterTerm2(e.target.value)}
+                  className="text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white focus:outline-none focus:border-primary/50">
                   {['Term 1', 'Term 2', 'Term 3'].map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-white/50 text-xs mb-1.5">Academic Year</label>
-                <input value={form.academicYear} onChange={e => setForm(p => ({ ...p, academicYear: e.target.value }))} className="input-field" />
+                <label className="text-white/40 text-xs mr-2">Year:</label>
+                <input type="text" value={filterYear} onChange={e => setFilterYear(e.target.value)}
+                  className="text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white w-20 focus:outline-none focus:border-primary/50" />
               </div>
-              <div>
-                <label className="block text-white/50 text-xs mb-1.5">Remarks</label>
-                <input value={form.remarks} onChange={e => setForm(p => ({ ...p, remarks: e.target.value }))} placeholder="Optional" className="input-field" />
-              </div>
-              <div className="sm:col-span-2 lg:col-span-3 flex gap-3">
-                <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2">
-                  {saving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Check size={15} />}
-                  Record Grade
-                </button>
-                <button type="button" onClick={() => setShowForm(false)} className="btn-ghost">Cancel</button>
-              </div>
-            </form>
-          </motion.div>
+            </motion.div>
+
+            <UploadResults
+              myClasses={classes}
+              allGrades={grades}
+              term={filterTerm2}
+              academicYear={filterYear}
+              onClose={() => setShowUpload(false)}
+              onSaved={handleSaved}
+            />
+          </>
         )}
       </AnimatePresence>
 
-      {/* ── Student list (grouped) ── */}
+      {/* Student list */}
       <div className="glass-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -315,7 +521,6 @@ const Grades = () => {
                   const avg    = Math.round(sg.reduce((s, g) => s + g.score, 0) / sg.length);
                   const best   = sg.reduce((a, b) => a.score > b.score ? a : b, sg[0]);
                   const unique = [...new Set(sg.map(g => g.subject))];
-
                   return (
                     <motion.tr key={student?._id || i}
                       initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
@@ -327,7 +532,7 @@ const Grades = () => {
                             {student?.name?.[0] || '?'}
                           </div>
                           <div>
-                            <p className="text-white text-sm font-medium hover:text-primary transition-colors">{student?.name || '—'}</p>
+                            <p className="text-white text-sm font-medium">{student?.name || '—'}</p>
                             <p className="text-white/30 text-xs font-mono">{student?.studentId || ''}</p>
                           </div>
                         </div>
@@ -349,9 +554,7 @@ const Grades = () => {
                           <span className="font-mono font-bold text-white text-sm">{avg}%</span>
                         </div>
                       </td>
-                      <td className="py-3 px-4">
-                        <span className={gradeColor(best?.grade)}>{best?.grade}</span>
-                      </td>
+                      <td className="py-3 px-4"><span className={gradeColor(best?.grade)}>{best?.grade}</span></td>
                       <td className="py-3 px-4 text-white/40 text-xs">{sg.length} record{sg.length !== 1 ? 's' : ''}</td>
                       <td className="py-3 px-4">
                         <span className="text-white/20 text-xs hover:text-primary transition-colors">View →</span>
