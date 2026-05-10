@@ -17,46 +17,71 @@ import StudentPortal from './pages/StudentPortal';
 import Layout from './components/ui/Layout';
 import PasswordModal from './components/ui/PasswordModal';
 
-const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
-  if (loading) return (
-    <div className="loading-screen">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center">
-          <span className="font-display text-primary text-2xl">EM</span>
-        </div>
-        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+// Loading screen
+const LoadingScreen = () => (
+  <div className="loading-screen">
+    <div className="flex flex-col items-center gap-4">
+      <div className="w-14 h-14 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center">
+        <span className="font-display text-primary text-2xl">EM</span>
       </div>
+      <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
     </div>
-  );
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
+  </div>
+);
+
+// Protected route — blocks unauthenticated users
+const ProtectedRoute = ({ children, adminOnly = false }) => {
+  const { isAuthenticated, loading, user } = useAuth();
+
+  if (loading) return <LoadingScreen />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+  // Students trying to access admin/teacher pages → redirect to portal
+  if (adminOnly && user?.role === 'student') {
+    return <Navigate to="/student-portal" replace />;
+  }
+
+  return children;
 };
 
-const AppRoutes = () => (
-  <Routes>
-    <Route path="/login" element={<Login />} />
-    <Route path="/*" element={
-      <ProtectedRoute>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/students" element={<Students />} />
-            <Route path="/teachers" element={<Teachers />} />
-            <Route path="/classes" element={<Classes />} />
-            <Route path="/grades" element={<Grades />} />
-            <Route path="/attendance" element={<Attendance />} />
-            <Route path="/announcements" element={<Announcements />} />
-            <Route path="/reports/terminal" element={<TerminalReport />} />
-            <Route path="/teacher-accounts" element={<TeacherAccounts />} />
-            <Route path="/student-accounts" element={<StudentAccounts />} />
-            <Route path="/student-portal" element={<StudentPortal />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Layout>
-      </ProtectedRoute>
-    } />
-  </Routes>
-);
+const AppRoutes = () => {
+  const { user } = useAuth();
+
+  return (
+    <Routes>
+      {/* Public */}
+      <Route path="/login" element={<Login />} />
+
+      {/* Student portal — has its OWN layout, outside admin Layout */}
+      <Route path="/student-portal" element={
+        <ProtectedRoute>
+          <StudentPortal />
+        </ProtectedRoute>
+      } />
+
+      {/* Admin / Teacher pages — use the admin Layout with sidebar */}
+      <Route path="/*" element={
+        <ProtectedRoute adminOnly>
+          <Layout>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/students" element={<Students />} />
+              <Route path="/teachers" element={<Teachers />} />
+              <Route path="/classes" element={<Classes />} />
+              <Route path="/grades" element={<Grades />} />
+              <Route path="/attendance" element={<Attendance />} />
+              <Route path="/announcements" element={<Announcements />} />
+              <Route path="/reports/terminal" element={<TerminalReport />} />
+              <Route path="/teacher-accounts" element={<TeacherAccounts />} />
+              <Route path="/student-accounts" element={<StudentAccounts />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Layout>
+        </ProtectedRoute>
+      } />
+    </Routes>
+  );
+};
 
 function App() {
   return (
