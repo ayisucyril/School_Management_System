@@ -1,3 +1,4 @@
+import StudentPortal from './pages/StudentPortal';
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
@@ -40,6 +41,7 @@ const AppRoutes = () => (
             <Route path="/" element={<Dashboard />} />
             <Route path="/students" element={<Students />} />
             <Route path="/teachers" element={<Teachers />} />
+            <Route path="/student-portal" element={<StudentPortal />} />
             <Route path="/classes" element={<Classes />} />
             <Route path="/grades" element={<Grades />} />
             <Route path="/attendance" element={<Attendance />} />
