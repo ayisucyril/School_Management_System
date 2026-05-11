@@ -11,6 +11,58 @@ import {
 import { useAuth, api } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
+const BACKEND = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace('/api', '');
+
+// ─── Reusable Avatar component ────────────────────────────────────────────────
+const Avatar = ({ avatarPath, name, size = 'md', className = '' }) => {
+  const sizes = {
+    sm:  'w-8 h-8 text-sm',
+    md:  'w-10 h-10 text-base',
+    lg:  'w-20 h-20 text-3xl',
+    xl:  'w-24 h-24 text-4xl',
+  };
+  const sizeClass = sizes[size] || sizes.md;
+  const initial   = name?.[0]?.toUpperCase() || '?';
+  const src       = avatarPath ? `${BACKEND}${avatarPath}` : null;
+
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+        className={`${sizeClass} rounded-2xl object-cover border-2 border-primary/40 flex-shrink-0 ${className}`}
+      />
+    );
+  }
+  return (
+    <div className={`${sizeClass} rounded-2xl bg-primary/20 border-2 border-primary/40 flex items-center justify-center text-primary font-bold flex-shrink-0 ${className}`}>
+      {initial}
+    </div>
+  );
+};
+
+// ─── Round avatar (for sidebar/topbar) ───────────────────────────────────────
+const RoundAvatar = ({ avatarPath, name, size = 8 }) => {
+  const initial = name?.[0]?.toUpperCase() || '?';
+  const src     = avatarPath ? `${BACKEND}${avatarPath}` : null;
+  const cls     = `w-${size} h-${size} rounded-full border border-primary/30 flex-shrink-0`;
+
+  if (src) {
+    return (
+      <img src={src} alt={name}
+        onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+        className={`${cls} object-cover`}
+      />
+    );
+  }
+  return (
+    <div className={`${cls} bg-primary/20 flex items-center justify-center text-primary text-sm font-bold`}>
+      {initial}
+    </div>
+  );
+};
+
 const StudentPortal = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -70,12 +122,12 @@ const StudentPortal = () => {
     setUnreadCount(0);
   };
 
-  const studentName = user?.name || 'Student';
-  const studentId = studentProfile?.studentId || '—';
-  const className = studentProfile?.classId?.name || '—';
-  const greeting = new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening';
+  const studentName  = user?.name || 'Student';
+  const studentId    = studentProfile?.studentId || '—';
+  const className    = studentProfile?.classId?.name || '—';
+  const avatarPath   = studentProfile?.avatar || null; // ← profile picture from admission
+  const greeting     = new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening';
 
-  // Filter grades for this student
   const myGrades = grades.filter(g =>
     g.studentId?._id === studentProfile?._id ||
     g.studentId === studentProfile?._id
@@ -85,31 +137,24 @@ const StudentPortal = () => {
     ? Math.round(myGrades.reduce((sum, g) => sum + g.score, 0) / myGrades.length)
     : 0;
 
-  // Filter attendance for this student
   const myAttendance = attendance.filter(a =>
     a.studentId?._id === studentProfile?._id ||
     a.studentId === studentProfile?._id
   );
-  const presentDays = myAttendance.filter(a => a.status === 'present').length;
-  const attendancePct = myAttendance.length > 0
+  const presentDays    = myAttendance.filter(a => a.status === 'present').length;
+  const attendancePct  = myAttendance.length > 0
     ? Math.round((presentDays / myAttendance.length) * 100)
     : 0;
 
   const subjectScores = uniqueSubjects.map(subject => {
-    const sg = myGrades.filter(g => g.subject === subject);
+    const sg  = myGrades.filter(g => g.subject === subject);
     const avg = Math.round(sg.reduce((s, g) => s + g.score, 0) / sg.length);
     return { name: subject, score: avg, grades: sg };
   });
 
-  const gradeColor = score =>
-    score >= 70 ? 'text-primary' :
-    score >= 50 ? 'text-accent' : 'text-red-400';
-
-  const gradeBarColor = score =>
-    score >= 70 ? 'bg-primary' :
-    score >= 50 ? 'bg-accent' : 'bg-red-500';
-
-  const gradeLetter = score => {
+  const gradeColor    = score => score >= 70 ? 'text-primary' : score >= 50 ? 'text-accent' : 'text-red-400';
+  const gradeBarColor = score => score >= 70 ? 'bg-primary' : score >= 50 ? 'bg-accent' : 'bg-red-500';
+  const gradeLetter   = score => {
     if (score >= 90) return 'A+';
     if (score >= 80) return 'A';
     if (score >= 70) return 'B+';
@@ -120,28 +165,21 @@ const StudentPortal = () => {
   };
 
   const priorityColor = p =>
-    p === 'high' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+    p === 'high'   ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
     p === 'medium' ? 'bg-accent/10 text-accent border border-accent/20' :
     'bg-primary/10 text-primary border border-primary/20';
 
   const navItem = (id, icon, label, badge = null) => (
-    <button
-      key={id}
-      onClick={() => setActiveMenu(id)}
+    <button key={id} onClick={() => setActiveMenu(id)}
       className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-        activeMenu === id
-          ? 'bg-primary/15 text-primary'
-          : 'text-white/50 hover:text-white hover:bg-white/5'
-      }`}
-    >
+        activeMenu === id ? 'bg-primary/15 text-primary' : 'text-white/50 hover:text-white hover:bg-white/5'
+      }`}>
       {icon}
       <span>{label}</span>
       {badge && (
         <span className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded-full ${
           badge === 'NEW' ? 'bg-accent/20 text-accent' : 'bg-red-500/20 text-red-400'
-        }`}>
-          {badge}
-        </span>
+        }`}>{badge}</span>
       )}
     </button>
   );
@@ -149,13 +187,10 @@ const StudentPortal = () => {
   // ── DASHBOARD SECTION ──────────────────────────────────────────
   const DashboardSection = () => (
     <div className="space-y-5">
-      {/* Welcome */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
+      {/* Welcome banner */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
         className="rounded-2xl p-5 flex items-center justify-between"
-        style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}
-      >
+        style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
         <div>
           <h2 className="text-white text-xl font-heading font-bold mb-1">
             Good {greeting}, {studentName.split(' ')[0]}! 👋
@@ -175,16 +210,26 @@ const StudentPortal = () => {
       </motion.div>
 
       {/* Profile card */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-        className="glass-card p-6"
-      >
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+        className="glass-card p-6">
         <div className="flex flex-col sm:flex-row gap-6 items-start">
-          {/* Avatar */}
+
+          {/* ── Profile picture from admission ── */}
           <div className="flex flex-col items-center gap-2 flex-shrink-0">
-            <div className="w-24 h-24 rounded-2xl bg-primary/20 border-2 border-primary/40 flex items-center justify-center text-primary text-4xl font-bold">
+            {avatarPath ? (
+              <img
+                src={`${BACKEND}${avatarPath}`}
+                alt={studentName}
+                onError={e => {
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'flex';
+                }}
+                className="w-24 h-24 rounded-2xl object-cover border-2 border-primary/40"
+              />
+            ) : null}
+            <div
+              className="w-24 h-24 rounded-2xl bg-primary/20 border-2 border-primary/40 items-center justify-center text-primary text-4xl font-bold"
+              style={{ display: avatarPath ? 'none' : 'flex' }}>
               {studentName[0]?.toUpperCase()}
             </div>
             <span className="badge-green text-xs capitalize">
@@ -205,15 +250,14 @@ const StudentPortal = () => {
                 <span className="text-primary text-xs font-medium">{className}</span>
               </div>
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2.5">
               {[
-                { icon: Mail, label: 'Email', value: studentProfile?.email || user?.email || '—' },
-                { icon: Phone, label: 'Phone', value: studentProfile?.phone || '—' },
-                { icon: MapPin, label: 'Address', value: studentProfile?.address || '—' },
-                { icon: Calendar, label: 'Date of Birth', value: studentProfile?.dateOfBirth ? new Date(studentProfile.dateOfBirth).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '—' },
-                { icon: Users, label: 'Gender', value: studentProfile?.gender || '—' },
-                { icon: BadgeCheck, label: 'Class', value: className },
+                { icon: Mail,      label: 'Email',       value: studentProfile?.email || user?.email || '—' },
+                { icon: Phone,     label: 'Phone',       value: studentProfile?.phone || '—' },
+                { icon: MapPin,    label: 'Address',     value: studentProfile?.address || '—' },
+                { icon: Calendar,  label: 'Date of Birth', value: studentProfile?.dateOfBirth ? new Date(studentProfile.dateOfBirth).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '—' },
+                { icon: Users,     label: 'Gender',      value: studentProfile?.gender || '—' },
+                { icon: BadgeCheck,label: 'Class',       value: className },
               ].map(({ icon: Icon, label, value }) => (
                 <div key={label} className="flex items-center gap-2.5">
                   <Icon size={14} className="text-primary/60 flex-shrink-0" />
@@ -229,21 +273,14 @@ const StudentPortal = () => {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { icon: <BookOpen size={20} className="text-primary" />, bg: 'bg-primary/15', label: 'Subjects', value: uniqueSubjects.length || '—', trend: 'Registered subjects', up: true },
-          { icon: <BarChart3 size={20} className="text-blue-400" />, bg: 'bg-blue-500/15', label: 'Grade Average', value: myGrades.length > 0 ? `${avgScore}%` : '—', trend: `${gradeLetter(avgScore)} grade`, up: avgScore >= 50 },
-          { icon: <Receipt size={20} className="text-red-400" />, bg: 'bg-red-500/15', label: 'Outstanding Fees', value: 'GHS 0', trend: 'No pending fees', up: true },
-          { icon: <CalendarCheck size={20} className="text-accent" />, bg: 'bg-accent/15', label: 'Attendance', value: myAttendance.length > 0 ? `${attendancePct}%` : '—', trend: `${presentDays} of ${myAttendance.length} days`, up: attendancePct >= 75 },
+          { icon: <BookOpen size={20} className="text-primary" />,    bg: 'bg-primary/15',      label: 'Subjects',         value: uniqueSubjects.length || '—', trend: 'Registered subjects', up: true },
+          { icon: <BarChart3 size={20} className="text-blue-400" />,  bg: 'bg-blue-500/15',     label: 'Grade Average',    value: myGrades.length > 0 ? `${avgScore}%` : '—', trend: `${gradeLetter(avgScore)} grade`, up: avgScore >= 50 },
+          { icon: <Receipt size={20} className="text-red-400" />,     bg: 'bg-red-500/15',      label: 'Outstanding Fees', value: 'GHS 0', trend: 'No pending fees', up: true },
+          { icon: <CalendarCheck size={20} className="text-accent" />,bg: 'bg-accent/15',       label: 'Attendance',       value: myAttendance.length > 0 ? `${attendancePct}%` : '—', trend: `${presentDays} of ${myAttendance.length} days`, up: attendancePct >= 75 },
         ].map((s, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.07 }}
-            className="glass-card p-4"
-          >
-            <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center mb-3`}>
-              {s.icon}
-            </div>
+          <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.07 }} className="glass-card p-4">
+            <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center mb-3`}>{s.icon}</div>
             <div className="text-white/50 text-xs mb-1">{s.label}</div>
             <div className="text-white text-2xl font-heading font-bold mb-1">{s.value}</div>
             <div className={`text-xs ${s.up ? 'text-primary' : 'text-red-400'}`}>
@@ -261,23 +298,18 @@ const StudentPortal = () => {
           </h3>
           <div className="grid grid-cols-2 gap-2">
             {[
-              { icon: <Eye size={15} className="text-primary" />, label: 'View Results', action: () => setActiveMenu('results') },
-              { icon: <FileText size={15} className="text-primary" />, label: 'Bio Data', action: () => setActiveMenu('biodata') },
-              { icon: <CreditCard size={15} className="text-primary" />, label: 'Pay Fees', action: () => {} },
-              { icon: <Download size={15} className="text-primary" />, label: 'Transcript', action: () => {} },
+              { icon: <Eye size={15} className="text-primary" />,      label: 'View Results', action: () => setActiveMenu('results') },
+              { icon: <FileText size={15} className="text-primary" />, label: 'Bio Data',     action: () => setActiveMenu('biodata') },
+              { icon: <CreditCard size={15} className="text-primary" />,label: 'Pay Fees',   action: () => {} },
+              { icon: <Download size={15} className="text-primary" />, label: 'Transcript',  action: () => {} },
             ].map(a => (
-              <button
-                key={a.label}
-                onClick={a.action}
-                className="flex items-center gap-2 bg-white/5 hover:bg-primary/10 border border-white/10 hover:border-primary/30 rounded-xl px-3 py-2.5 text-sm text-white/70 hover:text-white transition-all"
-              >
+              <button key={a.label} onClick={a.action}
+                className="flex items-center gap-2 bg-white/5 hover:bg-primary/10 border border-white/10 hover:border-primary/30 rounded-xl px-3 py-2.5 text-sm text-white/70 hover:text-white transition-all">
                 {a.icon} {a.label}
               </button>
             ))}
-            <button
-              onClick={() => setActiveMenu('announcements')}
-              className="col-span-2 flex items-center gap-2 bg-white/5 hover:bg-primary/10 border border-white/10 hover:border-primary/30 rounded-xl px-3 py-2.5 text-sm text-white/70 hover:text-white transition-all"
-            >
+            <button onClick={() => setActiveMenu('announcements')}
+              className="col-span-2 flex items-center gap-2 bg-white/5 hover:bg-primary/10 border border-white/10 hover:border-primary/30 rounded-xl px-3 py-2.5 text-sm text-white/70 hover:text-white transition-all">
               <Megaphone size={15} className="text-primary" /> View Announcements
             </button>
           </div>
@@ -291,8 +323,7 @@ const StudentPortal = () => {
             {announcements.length > 0 ? announcements.slice(0, 4).map(a => (
               <div key={a._id} className="flex gap-3">
                 <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
-                  a.priority === 'high' ? 'bg-red-500' :
-                  a.priority === 'medium' ? 'bg-accent' : 'bg-primary'
+                  a.priority === 'high' ? 'bg-red-500' : a.priority === 'medium' ? 'bg-accent' : 'bg-primary'
                 }`} />
                 <div>
                   <div className="text-white text-sm font-medium">{a.title}</div>
@@ -314,12 +345,24 @@ const StudentPortal = () => {
       <h1 className="section-title flex items-center gap-2">
         <User size={22} className="text-primary" /> Bio Data
       </h1>
-
       <div className="glass-card p-6">
         {/* Avatar + name */}
         <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start mb-6 pb-6 border-b border-white/5">
-          <div className="w-20 h-20 rounded-2xl bg-primary/20 border-2 border-primary/40 flex items-center justify-center text-primary text-3xl font-bold flex-shrink-0">
-            {studentName[0]?.toUpperCase()}
+          {/* ── Profile picture ── */}
+          <div className="flex-shrink-0">
+            {avatarPath ? (
+              <img
+                src={`${BACKEND}${avatarPath}`}
+                alt={studentName}
+                onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                className="w-24 h-24 rounded-2xl object-cover border-2 border-primary/40"
+              />
+            ) : null}
+            <div
+              className="w-24 h-24 rounded-2xl bg-primary/20 border-2 border-primary/40 items-center justify-center text-primary text-3xl font-bold"
+              style={{ display: avatarPath ? 'none' : 'flex' }}>
+              {studentName[0]?.toUpperCase()}
+            </div>
           </div>
           <div>
             <h2 className="text-2xl font-heading font-bold text-white">{studentName}</h2>
@@ -333,12 +376,12 @@ const StudentPortal = () => {
           <p className="text-primary text-xs font-medium uppercase tracking-widest mb-4">Personal Information</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
-              { label: 'Full Name', value: studentProfile?.name || studentName },
+              { label: 'Full Name',     value: studentProfile?.name || studentName },
               { label: 'Email Address', value: studentProfile?.email || user?.email || '—' },
-              { label: 'Phone Number', value: studentProfile?.phone || '—' },
-              { label: 'Gender', value: studentProfile?.gender || '—' },
+              { label: 'Phone Number',  value: studentProfile?.phone || '—' },
+              { label: 'Gender',        value: studentProfile?.gender || '—' },
               { label: 'Date of Birth', value: studentProfile?.dateOfBirth ? new Date(studentProfile.dateOfBirth).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '—' },
-              { label: 'Home Address', value: studentProfile?.address || '—' },
+              { label: 'Home Address',  value: studentProfile?.address || '—' },
             ].map(item => (
               <div key={item.label} className="bg-white/3 rounded-xl p-3 border border-white/5">
                 <div className="text-white/40 text-xs mb-1">{item.label}</div>
@@ -353,10 +396,10 @@ const StudentPortal = () => {
           <p className="text-primary text-xs font-medium uppercase tracking-widest mb-4">Academic Information</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
-              { label: 'Student ID', value: studentId },
+              { label: 'Student ID',        value: studentId },
               { label: 'Class / Programme', value: className },
               { label: 'Enrollment Status', value: studentProfile?.status || 'active' },
-              { label: 'Enrollment Date', value: studentProfile?.enrollmentDate ? new Date(studentProfile.enrollmentDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '—' },
+              { label: 'Enrollment Date',   value: studentProfile?.enrollmentDate ? new Date(studentProfile.enrollmentDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '—' },
             ].map(item => (
               <div key={item.label} className="bg-white/3 rounded-xl p-3 border border-white/5">
                 <div className="text-white/40 text-xs mb-1">{item.label}</div>
@@ -366,14 +409,14 @@ const StudentPortal = () => {
           </div>
         </div>
 
-        {/* Parent / Guardian Info */}
+        {/* Parent Info */}
         <div>
           <p className="text-primary text-xs font-medium uppercase tracking-widest mb-4">Parent / Guardian Information</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               { label: 'Parent / Guardian Name', value: studentProfile?.parentName || '—' },
-              { label: 'Parent Phone', value: studentProfile?.parentPhone || '—' },
-              { label: 'Parent Email', value: studentProfile?.parentEmail || '—' },
+              { label: 'Parent Phone',           value: studentProfile?.parentPhone || '—' },
+              { label: 'Parent Email',           value: studentProfile?.parentEmail || '—' },
             ].map(item => (
               <div key={item.label} className="bg-white/3 rounded-xl p-3 border border-white/5">
                 <div className="text-white/40 text-xs mb-1">{item.label}</div>
@@ -389,13 +432,11 @@ const StudentPortal = () => {
   // ── RESULTS SECTION ────────────────────────────────────────────
   const ResultsSection = () => {
     const terms = [...new Set(myGrades.map(g => g.term))];
-
     return (
       <div className="space-y-5">
         <h1 className="section-title flex items-center gap-2">
           <FileText size={22} className="text-primary" /> Statement of Results
         </h1>
-
         {myGrades.length === 0 ? (
           <div className="glass-card p-10 text-center">
             <BarChart3 size={48} className="mx-auto mb-3 text-white/20" />
@@ -404,13 +445,12 @@ const StudentPortal = () => {
           </div>
         ) : (
           <>
-            {/* Summary */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
-                { label: 'Total Subjects', value: uniqueSubjects.length },
+                { label: 'Total Subjects',  value: uniqueSubjects.length },
                 { label: 'Overall Average', value: `${avgScore}%` },
-                { label: 'Overall Grade', value: gradeLetter(avgScore) },
-                { label: 'Total Records', value: myGrades.length },
+                { label: 'Overall Grade',   value: gradeLetter(avgScore) },
+                { label: 'Total Records',   value: myGrades.length },
               ].map((s, i) => (
                 <div key={i} className="glass-card p-4 text-center">
                   <div className={`text-2xl font-heading font-bold mb-1 ${gradeColor(avgScore)}`}>{s.value}</div>
@@ -418,11 +458,9 @@ const StudentPortal = () => {
                 </div>
               ))}
             </div>
-
-            {/* Results by term */}
-            {terms.length > 0 ? terms.map(term => {
+            {terms.map(term => {
               const termGrades = myGrades.filter(g => g.term === term);
-              const termAvg = Math.round(termGrades.reduce((s, g) => s + g.score, 0) / termGrades.length);
+              const termAvg    = Math.round(termGrades.reduce((s, g) => s + g.score, 0) / termGrades.length);
               return (
                 <div key={term} className="glass-card overflow-hidden">
                   <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 bg-white/3">
@@ -449,17 +487,12 @@ const StudentPortal = () => {
                               <div className="flex items-center gap-3">
                                 <span className={`font-mono font-bold text-sm ${gradeColor(g.score)}`}>{g.score}%</span>
                                 <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden max-w-20">
-                                  <div
-                                    className={`h-full rounded-full ${gradeBarColor(g.score)}`}
-                                    style={{ width: `${g.score}%` }}
-                                  />
+                                  <div className={`h-full rounded-full ${gradeBarColor(g.score)}`} style={{ width: `${g.score}%` }} />
                                 </div>
                               </div>
                             </td>
                             <td className="py-3 px-4">
-                              <span className={`text-sm font-bold font-mono ${gradeColor(g.score)}`}>
-                                {gradeLetter(g.score)}
-                              </span>
+                              <span className={`text-sm font-bold font-mono ${gradeColor(g.score)}`}>{gradeLetter(g.score)}</span>
                             </td>
                             <td className="py-3 px-4 text-white/40 text-xs">{g.remarks || '—'}</td>
                           </tr>
@@ -469,32 +502,7 @@ const StudentPortal = () => {
                   </div>
                 </div>
               );
-            }) : (
-              <div className="glass-card overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-white/5">
-                        {['Subject', 'Score', 'Grade', 'Term', 'Remarks'].map(h => (
-                          <th key={h} className="text-left py-3 px-4 text-white/40 text-xs font-medium">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {myGrades.map((g, i) => (
-                        <tr key={g._id || i} className="table-row">
-                          <td className="py-3 px-4 text-white text-sm">{g.subject}</td>
-                          <td className="py-3 px-4 font-mono font-bold text-sm">{g.score}%</td>
-                          <td className={`py-3 px-4 font-bold text-sm ${gradeColor(g.score)}`}>{gradeLetter(g.score)}</td>
-                          <td className="py-3 px-4 text-white/40 text-xs">{g.term}</td>
-                          <td className="py-3 px-4 text-white/40 text-xs">{g.remarks || '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+            })}
           </>
         )}
       </div>
@@ -509,12 +517,9 @@ const StudentPortal = () => {
           <Megaphone size={22} className="text-primary" /> Announcements
         </h1>
         {unreadCount > 0 && (
-          <button onClick={markAllRead} className="btn-outline text-xs py-1.5">
-            Mark all read
-          </button>
+          <button onClick={markAllRead} className="btn-outline text-xs py-1.5">Mark all read</button>
         )}
       </div>
-
       {announcements.length === 0 ? (
         <div className="glass-card p-10 text-center">
           <Megaphone size={48} className="mx-auto mb-3 text-white/20" />
@@ -525,33 +530,17 @@ const StudentPortal = () => {
           {announcements.map((a, i) => {
             const isRead = readIds.includes(a._id);
             return (
-              <motion.div
-                key={a._id}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                onClick={() => markRead(a._id)}
-                className={`glass-card p-5 cursor-pointer hover:border-white/20 transition-all ${!isRead ? 'border-primary/20 bg-primary/3' : ''}`}
-              >
+              <motion.div key={a._id} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }} onClick={() => markRead(a._id)}
+                className={`glass-card p-5 cursor-pointer hover:border-white/20 transition-all ${!isRead ? 'border-primary/20 bg-primary/3' : ''}`}>
                 <div className="flex items-start gap-4">
                   <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${!isRead ? 'bg-red-500' : 'bg-transparent'}`} />
                   <div className="flex-1">
                     <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
-                      <h3 className={`font-heading font-semibold text-lg ${!isRead ? 'text-white' : 'text-white/70'}`}>
-                        {a.title}
-                      </h3>
+                      <h3 className={`font-heading font-semibold text-lg ${!isRead ? 'text-white' : 'text-white/70'}`}>{a.title}</h3>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${priorityColor(a.priority)}`}>
-                          {a.priority}
-                        </span>
-                        <span className="text-xs bg-white/5 text-white/40 border border-white/10 px-2.5 py-0.5 rounded-full capitalize">
-                          {a.targetAudience}
-                        </span>
-                        {!isRead && (
-                          <span className="text-xs bg-red-500/15 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full">
-                            New
-                          </span>
-                        )}
+                        <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${priorityColor(a.priority)}`}>{a.priority}</span>
+                        {!isRead && <span className="text-xs bg-red-500/15 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full">New</span>}
                       </div>
                     </div>
                     <p className="text-white/60 text-sm leading-relaxed mb-3">{a.content}</p>
@@ -573,9 +562,7 @@ const StudentPortal = () => {
   // ── ACCOMMODATION SECTION ──────────────────────────────────────
   const AccommodationSection = () => (
     <div className="space-y-5">
-      <h1 className="section-title flex items-center gap-2">
-        <Building size={22} className="text-primary" /> Accommodation
-      </h1>
+      <h1 className="section-title flex items-center gap-2"><Building size={22} className="text-primary" /> Accommodation</h1>
       <div className="glass-card p-10 text-center">
         <Building size={48} className="mx-auto mb-3 text-white/20" />
         <p className="text-white/40">Accommodation module coming soon.</p>
@@ -586,9 +573,7 @@ const StudentPortal = () => {
   // ── ACTIVITY LOGS SECTION ──────────────────────────────────────
   const ActivitySection = () => (
     <div className="space-y-5">
-      <h1 className="section-title flex items-center gap-2">
-        <Activity size={22} className="text-primary" /> Activity Logs
-      </h1>
+      <h1 className="section-title flex items-center gap-2"><Activity size={22} className="text-primary" /> Activity Logs</h1>
       <div className="glass-card p-6">
         <div className="space-y-3">
           {[
@@ -612,9 +597,8 @@ const StudentPortal = () => {
 
   // ── RESET PASSWORD SECTION ─────────────────────────────────────
   const ResetPasswordSection = () => {
-    const [form, setForm] = useState({ current: '', newPass: '', confirm: '' });
+    const [form, setForm]     = useState({ current: '', newPass: '', confirm: '' });
     const [loading, setLoading] = useState(false);
-
     const handleSubmit = async e => {
       e.preventDefault();
       if (form.newPass !== form.confirm) { toast.error('Passwords do not match'); return; }
@@ -628,28 +612,21 @@ const StudentPortal = () => {
         toast.error(e.response?.data?.error || 'Failed to change password');
       } finally { setLoading(false); }
     };
-
     return (
       <div className="space-y-5">
-        <h1 className="section-title flex items-center gap-2">
-          <Lock size={22} className="text-primary" /> Reset Password
-        </h1>
+        <h1 className="section-title flex items-center gap-2"><Lock size={22} className="text-primary" /> Reset Password</h1>
         <div className="glass-card p-6 max-w-md">
           <form onSubmit={handleSubmit} className="space-y-4">
             {[
               { label: 'Current Password', key: 'current' },
-              { label: 'New Password', key: 'newPass' },
+              { label: 'New Password',     key: 'newPass' },
               { label: 'Confirm New Password', key: 'confirm' },
             ].map(f => (
               <div key={f.key}>
                 <label className="block text-white/50 text-xs mb-1.5">{f.label}</label>
-                <input
-                  type="password"
-                  value={form[f.key]}
+                <input type="password" value={form[f.key]}
                   onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
-                  className="input-field"
-                  required
-                />
+                  className="input-field" required />
               </div>
             ))}
             <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
@@ -663,13 +640,13 @@ const StudentPortal = () => {
   };
 
   const sections = {
-    dashboard: <DashboardSection />,
-    biodata: <BioDataSection />,
-    results: <ResultsSection />,
+    dashboard:     <DashboardSection />,
+    biodata:       <BioDataSection />,
+    results:       <ResultsSection />,
     announcements: <AnnouncementsSection />,
     accommodation: <AccommodationSection />,
-    activity: <ActivitySection />,
-    password: <ResetPasswordSection />,
+    activity:      <ActivitySection />,
+    password:      <ResetPasswordSection />,
   };
 
   return (
@@ -689,17 +666,15 @@ const StudentPortal = () => {
 
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
           <p className="text-white/25 text-xs font-medium uppercase tracking-widest px-3 pt-2 pb-1">Main Menu</p>
-          {navItem('dashboard', <LayoutDashboard size={16} />, 'Dashboard')}
-          {navItem('biodata', <User size={16} />, 'Bio Data')}
-          {navItem('results', <FileText size={16} />, 'Statement of Results')}
-          {navItem('announcements', <Megaphone size={16} />, 'Announcements', unreadCount > 0 ? String(unreadCount) : null)}
-          {navItem('accommodation', <Building size={16} />, 'Accommodation')}
+          {navItem('dashboard',     <LayoutDashboard size={16} />, 'Dashboard')}
+          {navItem('biodata',       <User size={16} />,            'Bio Data')}
+          {navItem('results',       <FileText size={16} />,        'Statement of Results')}
+          {navItem('announcements', <Megaphone size={16} />,       'Announcements', unreadCount > 0 ? String(unreadCount) : null)}
+          {navItem('accommodation', <Building size={16} />,        'Accommodation')}
 
           <p className="text-white/25 text-xs font-medium uppercase tracking-widest px-3 pt-4 pb-1">Finance</p>
-          <button
-            onClick={() => setPayOpen(!payOpen)}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-white/50 hover:text-white hover:bg-white/5 transition-all"
-          >
+          <button onClick={() => setPayOpen(!payOpen)}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-white/50 hover:text-white hover:bg-white/5 transition-all">
             <CreditCard size={16} />
             <span>Payments</span>
             <ChevronDown size={14} className={`ml-auto transition-transform ${payOpen ? 'rotate-180' : ''}`} />
@@ -716,13 +691,20 @@ const StudentPortal = () => {
 
           <p className="text-white/25 text-xs font-medium uppercase tracking-widest px-3 pt-4 pb-1">Account</p>
           {navItem('activity', <Activity size={16} />, 'Activity Logs')}
-          {navItem('password', <Lock size={16} />, 'Reset Password')}
+          {navItem('password', <Lock size={16} />,     'Reset Password')}
         </nav>
 
-        {/* User + sign out */}
+        {/* ── Sidebar user area with profile picture ── */}
         <div className="p-3 border-t border-white/5 flex-shrink-0">
           <div className="flex items-center gap-3 px-3 py-2 mb-2">
-            <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold flex-shrink-0">
+            {/* Round avatar in sidebar */}
+            {avatarPath ? (
+              <img src={`${BACKEND}${avatarPath}`} alt={studentName}
+                onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                className="w-8 h-8 rounded-full object-cover border border-primary/30 flex-shrink-0" />
+            ) : null}
+            <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 items-center justify-center text-primary text-sm font-bold flex-shrink-0"
+              style={{ display: avatarPath ? 'none' : 'flex' }}>
               {studentName[0]?.toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
@@ -730,10 +712,8 @@ const StudentPortal = () => {
               <div className="text-white/40 text-xs">Student</div>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all"
-          >
+          <button onClick={handleLogout}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all">
             <LogOut size={16} />
             <span>Sign out</span>
           </button>
@@ -748,26 +728,19 @@ const StudentPortal = () => {
           <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
             <BookOpen size={14} className="text-white" />
           </div>
-          <span className="font-heading font-semibold text-white text-sm whitespace-nowrap">
-            Student Portal Dashboard
-          </span>
+          <span className="font-heading font-semibold text-white text-sm whitespace-nowrap">Student Portal Dashboard</span>
 
           <div className="relative flex-1 max-w-xs ml-2">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-            <input
-              type="text"
-              placeholder="Search..."
-              className="w-full bg-white/5 border border-white/10 rounded-xl pl-8 pr-4 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50 transition-all"
-            />
+            <input type="text" placeholder="Search..."
+              className="w-full bg-white/5 border border-white/10 rounded-xl pl-8 pr-4 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50 transition-all" />
           </div>
 
           <div className="ml-auto flex items-center gap-3">
             {/* Bell */}
             <div className="relative">
-              <button
-                onClick={() => setNotifOpen(!notifOpen)}
-                className="relative w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/50 hover:text-primary transition-colors"
-              >
+              <button onClick={() => setNotifOpen(!notifOpen)}
+                className="relative w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/50 hover:text-primary transition-colors">
                 <Bell size={16} />
                 {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
@@ -775,15 +748,10 @@ const StudentPortal = () => {
                   </span>
                 )}
               </button>
-
               <AnimatePresence>
                 {notifOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
-                    className="absolute right-0 top-10 w-80 bg-dark-100 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden"
-                  >
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
+                    className="absolute right-0 top-10 w-80 bg-dark-100 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
                       <span className="font-heading font-semibold text-white text-sm">
                         Announcements
@@ -798,11 +766,8 @@ const StudentPortal = () => {
                       {announcements.length === 0 ? (
                         <div className="text-center py-8 text-white/20 text-sm">No announcements yet</div>
                       ) : announcements.map(a => (
-                        <div
-                          key={a._id}
-                          onClick={() => { markRead(a._id); setNotifOpen(false); setActiveMenu('announcements'); }}
-                          className={`px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors ${!readIds.includes(a._id) ? 'bg-primary/5' : ''}`}
-                        >
+                        <div key={a._id} onClick={() => { markRead(a._id); setNotifOpen(false); setActiveMenu('announcements'); }}
+                          className={`px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors ${!readIds.includes(a._id) ? 'bg-primary/5' : ''}`}>
                           <div className="flex items-start gap-2.5">
                             <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${!readIds.includes(a._id) ? 'bg-red-500' : 'bg-transparent'}`} />
                             <div>
@@ -819,9 +784,17 @@ const StudentPortal = () => {
               </AnimatePresence>
             </div>
 
-            <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
+            {/* ── Topbar profile picture ── */}
+            {avatarPath ? (
+              <img src={`${BACKEND}${avatarPath}`} alt={studentName}
+                onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                className="w-8 h-8 rounded-full object-cover border border-primary/30" />
+            ) : null}
+            <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 items-center justify-center text-primary text-sm font-bold"
+              style={{ display: avatarPath ? 'none' : 'flex' }}>
               {studentName[0]?.toUpperCase()}
             </div>
+
             <div className="hidden sm:block">
               <div className="text-white text-sm font-medium leading-tight">{studentName}</div>
               <div className="text-white/40 text-xs font-mono">{studentId}</div>
@@ -835,17 +808,11 @@ const StudentPortal = () => {
         {/* Page Content */}
         <main className="flex-1 overflow-auto p-5">
           <AnimatePresence mode="wait">
-            <motion.div
-              key={activeMenu}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
+            <motion.div key={activeMenu} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
               {sections[activeMenu] || <DashboardSection />}
             </motion.div>
           </AnimatePresence>
-
           <div className="text-center text-white/20 text-xs mt-8 pb-2">
             © {new Date().getFullYear()} EduManage Student Portal
           </div>
