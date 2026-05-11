@@ -21,7 +21,11 @@ router.get('/', protect, async (req, res) => {
     }
 
     const grades = await Grade.find(query)
-      .populate('studentId', 'name studentId')
+      .populate({
+        path: 'studentId',
+        select: 'name studentId classId',
+        populate: { path: 'classId', select: 'name grade section' }  // 👈 fix: nested populate so student.classId.name works
+      })
       .populate('teacherId', 'name subject')
       .sort({ createdAt: -1 });
     res.json({ success: true, count: grades.length, grades });
