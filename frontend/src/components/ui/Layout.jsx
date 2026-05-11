@@ -14,12 +14,13 @@ const allNavItems = [
   { to: '/students', icon: Users, label: 'Students', adminOnly: true },
   { to: '/teachers', icon: GraduationCap, label: 'Teachers', adminOnly: true },
   { to: '/classes', icon: BookOpen, label: 'Classes', adminOnly: true },
+  { to: '/my-students', icon: Users, label: 'My Students', teacherOnly: true },
   { to: '/grades', icon: BarChart3, label: 'Grades' },
   { to: '/attendance', icon: CalendarCheck, label: 'Attendance' },
   { to: '/announcements', icon: Megaphone, label: 'Announcements', adminOnly: true },
   { to: '/reports/terminal', icon: FileText, label: 'Terminal Report' },
   { to: '/teacher-accounts', icon: Shield, label: 'Teacher Accounts', adminOnly: true },
-  { to: '/student-portal', icon: GraduationCap, label: 'Student Portal' },
+  { to: '/student-portal', icon: GraduationCap, label: 'Student Portal', hidden: true },
   { to: '/student-accounts', icon: Users, label: 'Student Accounts', adminOnly: true },
 ];
 
@@ -185,7 +186,11 @@ const Layout = ({ children }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const navItems = allNavItems.filter(item => !item.adminOnly || user?.role === 'admin');
+  const navItems = allNavItems.filter(item =>
+  !item.hidden &&
+  (!item.adminOnly || user?.role === 'admin') &&
+  (!item.teacherOnly || user?.role === 'teacher')
+);
   const sidebarW = collapsed ? SIDEBAR_W_COL : SIDEBAR_W;
 
   const handleLogout = () => {

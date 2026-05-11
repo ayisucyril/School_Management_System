@@ -14,6 +14,7 @@ import TerminalReport from './pages/TerminalReport';
 import TeacherAccounts from './pages/TeacherAccounts';
 import StudentAccounts from './pages/StudentAccounts';
 import StudentPortal from './pages/StudentPortal';
+import MyStudents from './pages/MyStudents';  // 👈 added
 import Layout from './components/ui/Layout';
 import PasswordModal from './components/ui/PasswordModal';
 
@@ -32,21 +33,17 @@ const LoadingScreen = () => (
 // Protected route — blocks unauthenticated users
 const ProtectedRoute = ({ children, adminOnly = false }) => {
   const { isAuthenticated, loading, user } = useAuth();
-
   if (loading) return <LoadingScreen />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-
   // Students trying to access admin/teacher pages → redirect to portal
   if (adminOnly && user?.role === 'student') {
     return <Navigate to="/student-portal" replace />;
   }
-
   return children;
 };
 
 const AppRoutes = () => {
   const { user } = useAuth();
-
   return (
     <Routes>
       {/* Public */}
@@ -68,6 +65,7 @@ const AppRoutes = () => {
               <Route path="/students" element={<Students />} />
               <Route path="/teachers" element={<Teachers />} />
               <Route path="/classes" element={<Classes />} />
+              <Route path="/my-students" element={<MyStudents />} />  {/* 👈 added */}
               <Route path="/grades" element={<Grades />} />
               <Route path="/attendance" element={<Attendance />} />
               <Route path="/announcements" element={<Announcements />} />
