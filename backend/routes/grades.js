@@ -24,7 +24,7 @@ router.get('/', protect, async (req, res) => {
       .populate({
         path: 'studentId',
         select: 'name studentId classId',
-        populate: { path: 'classId', select: 'name grade section' }  // 👈 fix: nested populate so student.classId.name works
+        populate: { path: 'classId', select: 'name grade section' }  
       })
       .populate('teacherId', 'name subject')
       .sort({ createdAt: -1 });
