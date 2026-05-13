@@ -49,7 +49,7 @@ router.post('/', protect, authorize('admin', 'teacher'), async (req, res) => {
       if (teacherProfile) {
         gradeData.teacherId = teacherProfile._id;
         // Teacher can only upload their own subject
-        if (!gradeData.subject) gradeData.subject = teacherProfile.subject;
+        if (!gradeData.subject) gradeData.subject = teacherProfile.subject; 
       }
     }
 
