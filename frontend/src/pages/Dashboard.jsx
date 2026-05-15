@@ -72,7 +72,7 @@ const TeacherDashboard = ({ user }) => {
         className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-heading font-bold text-white">
-            Good {greeting}, {user?.name?.split(' ')[0]}! 👋
+            Good {greeting}, {user?.name?.split(' ')[0]}! 
           </h1>
           <p className="text-white/40 text-sm mt-0.5">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
