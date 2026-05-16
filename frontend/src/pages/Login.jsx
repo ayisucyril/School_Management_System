@@ -80,7 +80,7 @@ const Login = () => {
                 : 'Sign In'}
             </motion.button>
           </form>
-                /* ── Demo ── */
+                
           <div className="mt-6 p-4 bg-accent/5 border border-accent/20 rounded-xl">
             <p className="text-accent text-xs font-medium mb-1">Demo Credentials</p>
             <p className="text-white/50 text-xs">Run the setup endpoint first to create admin account</p>
